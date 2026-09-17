@@ -9,6 +9,8 @@ Setup follows the same local run pattern as RewardBackend: Homebrew PostgreSQL, 
 - Kotlin 2.2, Java 17
 - Spring Boot 4.0
 - PostgreSQL (default) or H2 (`h2` profile)
+- Redis (optional feed cache)
+- Kafka (optional upload → media worker)
 - Flyway for Postgres schema/seed
 - JWT (HS256) + BCrypt
 - OpenAPI / Swagger UI
@@ -26,6 +28,14 @@ Or:
 ```bash
 ./gradlew bootRun
 ```
+
+Optional Kafka + Redis (V2 pipeline):
+
+```bash
+docker compose up -d kafka redis
+```
+
+Then set `REELS_KAFKA_ENABLED=true` and `REELS_REDIS_ENABLED=true` in `.env`. Without those flags the API still works: uploads go to S3 (or fake storage in tests) and a local media worker transcodes immediately.
 
 - API: http://localhost:8080
 - Swagger UI: http://localhost:8080/swagger-ui.html
@@ -51,8 +61,53 @@ Same variable names as RewardBackend:
 | `JWT_SECRET` | local default — change in any shared environment |
 | `JWT_ISSUER` | `indieestate-backend` |
 | `JWT_ACCESS_TOKEN_TTL_SECONDS` | `7200` |
+| `REELS_S3_BUCKET` | empty = fake in-memory storage |
+| `REELS_CDN_BASE_URL` | CloudFront origin URL |
+| `AWS_REGION` | `ap-south-1` |
+| `REELS_FFMPEG_PATH` | `ffmpeg` |
+| `REELS_KAFKA_ENABLED` | `false` |
+| `REELS_REDIS_ENABLED` | `false` |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` |
+| `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` |
 
 Copy `.env.example` if you want a local env file.
+
+## Reels: S3 + CloudFront (Play)
+
+Postgres stores video metadata only (`videos`, `video_renditions`, `reels`). The binary lives in S3. Phones upload with a presigned PUT, Kafka (or a local worker) transcodes to multi-bitrate HLS, and Play streams the master playlist from CloudFront. Media3 / AVPlayer pick 1080 / 720 / 480 / 360 from that playlist.
+
+S3 keys:
+
+```
+raw/{videoId}/original.mp4
+media/{videoId}/hls/master.m3u8
+media/{videoId}/hls/{1080p,720p,480p,360p}/playlist.m3u8
+media/{videoId}/thumbnail/poster.jpg
+```
+
+Video status: `UPLOADING` → `UPLOADED` → `PROCESSING` → `READY` or `FAILED`. `GET /api/reels` returns `READY` reels only. Do not put AWS keys in git.
+
+1. Create a **private** bucket (example: `indieestate-reels-uat` in `ap-south-1`). Block all public access.
+2. Bucket CORS (PUT from the app, GET from the player):
+
+```json
+[
+  {
+    "AllowedHeaders": ["*"],
+    "AllowedMethods": ["GET", "HEAD", "PUT"],
+    "AllowedOrigins": ["*"],
+    "ExposeHeaders": ["ETag", "Accept-Ranges", "Content-Length"],
+    "MaxAgeSeconds": 3000
+  }
+]
+```
+
+3. CloudFront distribution with Origin Access Control to that bucket. HTTPS only. Copy the domain (`https://dxxxxx.cloudfront.net`).
+4. IAM user limited to `s3:PutObject`, `s3:GetObject`, `s3:HeadObject`, `s3:ListBucket`, `s3:DeleteObject` on that bucket. Create an access key.
+5. `brew install ffmpeg`
+6. Copy `.env.example` to `.env` and set `AWS_*`, `REELS_S3_BUCKET`, `REELS_CDN_BASE_URL`.
+
+Without `REELS_S3_BUCKET`, the backend uses in-memory fake storage (H2 tests). Playback on a phone needs real S3 + CloudFront so video does not go through `adb reverse`.
 
 ## API flow
 
@@ -62,8 +117,14 @@ Copy `.env.example` if you want a local env file.
 4. Render the schema on the client, collect values
 5. `POST /api/auth/register` or `POST /api/auth/login`
 6. `POST /api/ads` with the JWT and filled `data`
+7. `GET /api/reels` — Play-screen feed (`READY` reels only; Redis cache when enabled)
+8. `POST /api/reels/uploads` — creates a `videos` row (`UPLOADING`) and a presigned S3 PUT to `raw/{videoId}/original.*` (JWT)
+9. `POST /api/reels/complete` — marks the video `UPLOADED`, publishes `video.uploaded`, worker writes ABR HLS (JWT)
+10. `POST /api/reels` — publish a reel from an existing URL (JWT, tests / legacy)
+11. `POST /api/reels/upload` — legacy gallery multipart through the API (JWT)
+12. `GET /api/reels/media/{filename}` — stream a legacy locally stored video
 
-Protected routes: `GET /api/auth/me`, `POST /api/ads`, `GET /api/ads/me`.
+Protected routes: `GET /api/auth/me`, `POST /api/ads`, `GET /api/ads/me`, `POST /api/reels`, `POST /api/reels/uploads`, `POST /api/reels/complete`.
 
 ## Tests
 

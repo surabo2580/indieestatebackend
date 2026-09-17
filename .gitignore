@@ -8,4 +8,5 @@ out/
 .DS_Store
 *.log
 .env
+uploads/
 .kotlin/

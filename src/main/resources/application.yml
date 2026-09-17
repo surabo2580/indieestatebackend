@@ -20,6 +20,26 @@ spring:
           time_zone: UTC
   flyway:
     enabled: false
+  servlet:
+    multipart:
+      max-file-size: 80MB
+      max-request-size: 80MB
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP:indieestate-media-workers}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    listener:
+      auto-startup: ${REELS_KAFKA_ENABLED:false}
 
 server:
   port: ${PORT:8080}
@@ -33,8 +53,29 @@ security:
 app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:*}
+  reels:
+    upload-dir: ${REELS_UPLOAD_DIR:uploads/reels}
+    s3-bucket: ${REELS_S3_BUCKET:}
+    s3-region: ${AWS_REGION:ap-south-1}
+    cdn-base-url: ${REELS_CDN_BASE_URL:}
+    ffmpeg-path: ${REELS_FFMPEG_PATH:ffmpeg}
+    kafka-enabled: ${REELS_KAFKA_ENABLED:false}
+    redis-enabled: ${REELS_REDIS_ENABLED:false}
+    kafka:
+      uploaded-topic: video.uploaded
+      processed-topic: video.processed
+      watch-topic: video.watch
+      like-topic: video.like
+      share-topic: video.share
+      completed-topic: video.completed
+      worker-group: indieestate-media-workers
 
 management:
+  health:
+    redis:
+      enabled: ${REELS_REDIS_ENABLED:false}
+    kafka:
+      enabled: ${REELS_KAFKA_ENABLED:false}
   endpoints:
     web:
       exposure:
@@ -70,3 +111,14 @@ spring:
       ddl-auto: update
   flyway:
     enabled: false
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.RedisAutoConfiguration
+      - org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration
+
+app:
+  reels:
+    kafka-enabled: false
+    redis-enabled: false

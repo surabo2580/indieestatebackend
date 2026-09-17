@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Load local secrets without committing them. AWS keys for reels live here.
+if [[ -f .env ]]; then
+	set -a
+	# shellcheck disable=SC1091
+	source .env
+	set +a
+fi
+
 # Always use this project's database. Do not inherit RewardBackend's
 # POSTGRES_DB / SPRING_DATASOURCE_URL from the shell.
 export POSTGRES_DB=indieestate

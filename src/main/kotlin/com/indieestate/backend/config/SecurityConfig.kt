@@ -16,6 +16,9 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
+import org.springframework.security.web.util.matcher.RequestMatcher
+import jakarta.servlet.DispatcherType
+import jakarta.servlet.http.HttpServletRequest
 import org.springframework.web.cors.CorsConfiguration
 import org.springframework.web.cors.CorsConfigurationSource
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource
@@ -35,9 +38,9 @@ class SecurityConfig(
     fun corsConfigurationSource(): CorsConfigurationSource {
         val configuration = CorsConfiguration()
         configuration.allowedOrigins = allowedOrigins.split(",").map { it.trim() }
-        configuration.allowedMethods = listOf("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+        configuration.allowedMethods = listOf("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
         configuration.allowedHeaders = listOf("*")
-        configuration.exposedHeaders = listOf("Authorization")
+        configuration.exposedHeaders = listOf("Authorization", "Accept-Ranges", "Content-Range", "Content-Length")
         val source = UrlBasedCorsConfigurationSource()
         source.registerCorsConfiguration("/**", configuration)
         return source
@@ -46,6 +49,10 @@ class SecurityConfig(
     @Bean
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
         http
+            .securityMatcher(RequestMatcher { request ->
+                val path = request.servletPath.ifBlank { request.requestURI }
+                !path.startsWith("/api/reels/media")
+            })
             .csrf { it.disable() }
             .httpBasic { it.disable() }
             .formLogin { it.disable() }
@@ -60,7 +67,13 @@ class SecurityConfig(
                 }
             }
             .authorizeHttpRequests { auth ->
+                auth.dispatcherTypeMatchers(
+                    DispatcherType.ASYNC,
+                    DispatcherType.ERROR,
+                    DispatcherType.FORWARD,
+                ).permitAll()
                 auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                auth.requestMatchers("/api/reels/media/**").permitAll()
                 auth.requestMatchers(
                     HttpMethod.GET,
                     "/api/categories",
@@ -69,6 +82,14 @@ class SecurityConfig(
                     "/api/services/**",
                     "/api/forms",
                     "/api/forms/**",
+                    "/api/reels",
+                    "/api/reels/**",
+                    "/api/health",
+                ).permitAll()
+                auth.requestMatchers(
+                    HttpMethod.HEAD,
+                    "/api/reels",
+                    "/api/reels/**",
                     "/api/health",
                 ).permitAll()
                 auth.requestMatchers(

@@ -2,6 +2,7 @@ package com.indieestate.backend
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.indieestate.backend.storage.ReelObjectStorage
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
@@ -11,14 +12,19 @@ import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
+import org.springframework.transaction.annotation.Transactional
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("h2")
+@Transactional
 class ApiIntegrationTest {
 
     @Autowired
     lateinit var mockMvc: MockMvc
+
+    @Autowired
+    lateinit var reelObjectStorage: ReelObjectStorage
 
     private val objectMapper = jacksonObjectMapper()
 
@@ -133,6 +139,125 @@ class ApiIntegrationTest {
             status { isOk() }
             jsonPath("$.length()") { value(1) }
         }
+    }
+
+    @Test
+    fun postReelRequiresAuthAndListIsPublic() {
+        mockMvc.get("/api/reels")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.length()") { value(0) }
+            }
+
+        mockMvc.post("/api/reels") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """
+                {
+                  "title": "Honda City",
+                  "caption": "Single owner",
+                  "category": "Cars",
+                  "priceLabel": "₹8.4 Lakh",
+                  "location": "Gachibowli",
+                  "videoUrl": "https://example.com/city.mp4"
+                }
+            """.trimIndent()
+        }.andExpect {
+            status { isUnauthorized() }
+        }
+
+        val token = postJson(
+            "/api/auth/register",
+            """{"name":"Reel Seller","email":"reels@example.com","password":"password1"}""",
+            expectedStatus = 201,
+        )["accessToken"].asText()
+
+        mockMvc.post("/api/reels") {
+            header("Authorization", "Bearer $token")
+            contentType = MediaType.APPLICATION_JSON
+            content = """
+                {
+                  "title": "2019 Honda City VX",
+                  "caption": "Single owner, petrol, sunroof.",
+                  "category": "Cars",
+                  "priceLabel": "₹8.4 Lakh",
+                  "location": "Gachibowli, Hyderabad",
+                  "videoUrl": "https://example.com/city.mp4",
+                  "thumbnailHex": "#1B3A4B"
+                }
+            """.trimIndent()
+        }.andExpect {
+            status { isCreated() }
+            jsonPath("$.title") { value("2019 Honda City VX") }
+            jsonPath("$.sellerName") { value("Reel Seller") }
+            jsonPath("$.sellerInitials") { value("RS") }
+            jsonPath("$.videoUrl") { value("https://example.com/city.mp4") }
+            jsonPath("$.status") { value("READY") }
+            jsonPath("$.likeCount") { value(0) }
+            jsonPath("$.commentCount") { value(0) }
+        }
+
+        mockMvc.get("/api/reels")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.length()") { value(1) }
+                jsonPath("$[0].category") { value("Cars") }
+                jsonPath("$[0].priceLabel") { value("₹8.4 Lakh") }
+                jsonPath("$[0].comments.length()") { value(0) }
+            }
+    }
+
+    @Test
+    fun presignAndCompleteReelUsesObjectStorage() {
+        val token = postJson(
+            "/api/auth/register",
+            """{"name":"Upload Seller","email":"upload@example.com","password":"password1"}""",
+            expectedStatus = 201,
+        )["accessToken"].asText()
+
+        val upload = objectMapper.readTree(
+            mockMvc.post("/api/reels/uploads") {
+                header("Authorization", "Bearer $token")
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"fileName":"walkthrough.mp4","contentType":"video/mp4"}"""
+            }.andExpect {
+                status { isCreated() }
+                jsonPath("$.videoId") { exists() }
+                jsonPath("$.objectKey") { exists() }
+                jsonPath("$.uploadUrl") { exists() }
+            }.andReturn().response.contentAsString,
+        )
+        val objectKey = upload["objectKey"].asText()
+        val videoId = upload["videoId"].asText()
+        reelObjectStorage.put(objectKey, byteArrayOf(0, 1, 2, 3), "video/mp4")
+
+        mockMvc.post("/api/reels/complete") {
+            header("Authorization", "Bearer $token")
+            contentType = MediaType.APPLICATION_JSON
+            content = """
+                {
+                  "title": "Villa walkthrough",
+                  "caption": "Garden view",
+                  "category": "Properties",
+                  "priceLabel": "₹4.2 Cr",
+                  "location": "Jubilee Hills",
+                  "objectKey": "$objectKey",
+                  "videoId": "$videoId"
+                }
+            """.trimIndent()
+        }.andExpect {
+            status { isCreated() }
+            jsonPath("$.title") { value("Villa walkthrough") }
+            jsonPath("$.status") { value("READY") }
+            jsonPath("$.videoId") { value(videoId) }
+            jsonPath("$.videoUrl") { value("https://cdn.test/media/$videoId/hls/master.m3u8") }
+        }
+
+        mockMvc.get("/api/reels")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$[0].title") { value("Villa walkthrough") }
+                jsonPath("$[0].status") { value("READY") }
+            }
     }
 
     @Test
