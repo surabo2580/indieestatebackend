@@ -18,7 +18,9 @@ import com.indieestate.backend.repository.ReelRepository
 import com.indieestate.backend.repository.UserRepository
 import com.indieestate.backend.repository.VideoRepository
 import com.indieestate.backend.storage.ReelObjectStorage
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
+import software.amazon.awssdk.services.s3.model.S3Exception
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
@@ -33,6 +35,7 @@ class ReelService(
     private val storage: ReelObjectStorage,
     private val feedCache: ReelFeedCache,
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
 
     @Transactional
     fun create(userId: UUID, request: CreateReelRequest): ReelResponse {
@@ -78,10 +81,25 @@ class ReelService(
                 originalKey = objectKey,
             ),
         )
+        val uploadUrl = try {
+            storage.presignPut(objectKey, contentType)
+        } catch (error: S3Exception) {
+            log.error("Failed to presign S3 upload for {}", objectKey, error)
+            throw ApiException(
+                HttpStatus.BAD_GATEWAY,
+                "Could not prepare S3 upload. Check AWS keys, bucket name, and region in .env",
+            )
+        } catch (error: Exception) {
+            log.error("Failed to presign S3 upload for {}", objectKey, error)
+            throw ApiException(
+                HttpStatus.BAD_GATEWAY,
+                "Could not prepare S3 upload: ${error.message ?: "unknown error"}",
+            )
+        }
         return CreateReelUploadResponse(
             videoId = videoId,
             objectKey = objectKey,
-            uploadUrl = storage.presignPut(objectKey, contentType),
+            uploadUrl = uploadUrl,
             contentType = contentType,
         )
     }
