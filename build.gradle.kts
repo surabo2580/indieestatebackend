@@ -34,6 +34,7 @@ dependencies {
     implementation("software.amazon.awssdk:s3")
     implementation("org.springframework.kafka:spring-kafka")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
+    implementation("org.springframework.boot:spring-boot-starter-websocket")
     implementation(libs.jjwt.api)
     implementation(libs.springdoc.openapi)
     runtimeOnly(libs.jjwt.impl)

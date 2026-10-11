@@ -20,6 +20,7 @@ class JwtAuthenticationFilter(
         if (request.method == "OPTIONS") return true
         val path = request.servletPath
         return path == "/api/health" ||
+            path.startsWith("/ws/") ||
             path.startsWith("/api/categories") ||
             path.startsWith("/api/services") ||
             path.startsWith("/api/forms") ||

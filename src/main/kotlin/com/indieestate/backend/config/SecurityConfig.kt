@@ -74,6 +74,7 @@ class SecurityConfig(
                 ).permitAll()
                 auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 auth.requestMatchers("/api/reels/media/**").permitAll()
+                auth.requestMatchers("/ws/**").permitAll()
                 auth.requestMatchers(
                     HttpMethod.GET,
                     "/api/categories",

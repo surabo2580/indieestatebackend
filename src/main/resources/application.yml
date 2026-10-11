@@ -83,6 +83,8 @@ app:
     ffmpeg-path: ${REELS_FFMPEG_PATH:ffmpeg}
     kafka-enabled: ${REELS_KAFKA_ENABLED:false}
     redis-enabled: ${REELS_REDIS_ENABLED:false}
+  chat:
+    redis-enabled: ${CHAT_REDIS_ENABLED:${REELS_REDIS_ENABLED:false}}
     kafka:
       uploaded-topic: video.uploaded
       processed-topic: video.processed
