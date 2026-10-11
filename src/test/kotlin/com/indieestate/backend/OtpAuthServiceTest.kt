@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 @TestPropertySource(
     properties = [
         "auth.otp.dev-mode=true",
-        "auth.otp.dev-fixed-code=424242",
+        "auth.otp.dev-otp=424242",
         "auth.otp.redis-enabled=false",
         "auth.otp.sms-provider=logging",
     ],

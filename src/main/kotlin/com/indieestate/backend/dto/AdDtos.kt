@@ -27,4 +27,7 @@ data class AdResponse(
     val data: Map<String, Any?>,
     val createdAt: Instant,
     val updatedAt: Instant,
+    val expiresAt: Instant,
+    val viewCount: Int = 0,
+    val likeCount: Int = 0,
 )

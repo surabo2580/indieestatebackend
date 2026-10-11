@@ -37,17 +37,28 @@ class OtpAuthService(
         val phone = OtpPhone.normalize(rawPhone)
         rateLimiter.checkAndRecord(phone, clientIp)
 
+        val devOtp = optionalText(properties.devOtp)
         val code = when {
-            properties.devMode && properties.devFixedCode.isNotBlank() ->
-                properties.devFixedCode.padStart(properties.length, '0').take(properties.length)
+            properties.devMode && devOtp.isNotBlank() ->
+                devOtp.padStart(properties.length, '0').take(properties.length)
             else -> randomNumericCode(properties.length)
         }
         val pending = PendingOtp(
             code = code,
             expiresAt = Instant.now().plusSeconds(properties.ttlSeconds),
         )
-        otpStore.savePending(phone, pending, properties.ttlSeconds)
-        otpStore.clearVerifyAttempts(phone)
+        try {
+            otpStore.savePending(phone, pending, properties.ttlSeconds)
+            otpStore.clearVerifyAttempts(phone)
+        } catch (error: ApiException) {
+            throw error
+        } catch (error: Exception) {
+            log.error("Failed to persist OTP for {}", OtpPhone.mask(phone), error)
+            throw ApiException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "Could not send OTP right now. Check Redis/OTP store and try again.",
+            )
+        }
 
         if (properties.devMode) {
             log.info("DEV OTP for {}: {} (expires in {}s)", OtpPhone.mask(phone), code, properties.ttlSeconds)
@@ -105,6 +116,9 @@ class OtpAuthService(
 
     private fun randomNumericCode(length: Int): String =
         (1..length).joinToString("") { random.nextInt(10).toString() }
+
+    /** Spring can bind empty `${ENV:}` placeholders as null onto Kotlin non-null strings. */
+    private fun optionalText(value: String?): String = value.orEmpty()
 
     companion object {
         fun normalizePhone(raw: String): String = OtpPhone.normalize(raw)

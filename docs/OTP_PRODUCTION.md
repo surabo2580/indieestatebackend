@@ -6,8 +6,8 @@ Your `.env` can stay minimal:
 
 ```bash
 AUTH_OTP_DEV_MODE=true
-# optional fixed OTP for everyone:
-# AUTH_OTP_DEV_FIXED_CODE=123456
+# optional development OTP for everyone:
+# AUTH_OTP_DEV_OTP=123456
 ```
 
 - OTP is logged on the server and returned as `debugOtp` in `POST /api/auth/otp/send`.

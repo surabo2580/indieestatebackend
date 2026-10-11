@@ -8,7 +8,8 @@ data class OtpProperties(
     val length: Int = 6,
     /** When true: log OTP, return debugOtp in API, skip real SMS. Set false in production. */
     val devMode: Boolean = true,
-    val devFixedCode: String = "",
+    /** Optional OTP used in development instead of a random code. */
+    val devOtp: String = "",
     /** Store OTP in Redis (required for multi-instance production). */
     val redisEnabled: Boolean = false,
     /** logging | msg91 | twilio | none */

@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 @Service
@@ -65,6 +66,32 @@ class AdService(
     fun listMine(userId: UUID): List<AdResponse> =
         adRepository.findAllByUserIdOrderByCreatedAtDesc(userId).map { it.toResponse() }
 
+    @Transactional
+    fun markSold(userId: UUID, adId: UUID): AdResponse {
+        val ad = requireOwnedAd(userId, adId)
+        ad.status = AdStatus.SOLD
+        ad.updatedAt = Instant.now()
+        return adRepository.save(ad).toResponse()
+    }
+
+    @Transactional
+    fun republish(userId: UUID, adId: UUID): AdResponse {
+        val ad = requireOwnedAd(userId, adId)
+        val now = Instant.now()
+        ad.status = AdStatus.ACTIVE
+        ad.updatedAt = now
+        return adRepository.save(ad).toResponse()
+    }
+
+    private fun requireOwnedAd(userId: UUID, adId: UUID): AdEntity {
+        val ad = adRepository.findById(adId)
+            .orElseThrow { ApiException(HttpStatus.NOT_FOUND, "Ad not found") }
+        if (ad.userId != userId) {
+            throw ApiException(HttpStatus.FORBIDDEN, "This ad belongs to another user")
+        }
+        return ad
+    }
+
     @Transactional(readOnly = true)
     fun listActive(categoryId: UUID?, serviceId: UUID?): List<AdResponse> {
         val ads = when {
@@ -78,7 +105,10 @@ class AdService(
             }
             else -> emptyList()
         }
-        return ads.map { it.toResponse() }
+        val now = Instant.now()
+        return ads
+            .filter { now.isBefore(it.updatedAt.plus(AdStatus.LISTING_DAYS, ChronoUnit.DAYS)) }
+            .map { it.toResponse() }
     }
 
     private fun resolveCategory(formCategoryId: UUID?, requested: UUID?): UUID? {
@@ -124,15 +154,25 @@ class AdService(
     }
 }
 
-fun AdEntity.toResponse() = AdResponse(
-    id = id,
-    userId = userId,
-    formId = formId,
-    categoryId = categoryId,
-    serviceId = serviceId,
-    title = title,
-    status = status,
-    data = data,
-    createdAt = createdAt,
-    updatedAt = updatedAt,
-)
+fun AdEntity.toResponse(): AdResponse {
+    val listingStart = updatedAt
+    val expiresAt = listingStart.plus(AdStatus.LISTING_DAYS, ChronoUnit.DAYS)
+    val displayStatus = when {
+        status == AdStatus.SOLD -> AdStatus.SOLD
+        Instant.now().isAfter(expiresAt) -> "EXPIRED"
+        else -> status
+    }
+    return AdResponse(
+        id = id,
+        userId = userId,
+        formId = formId,
+        categoryId = categoryId,
+        serviceId = serviceId,
+        title = title,
+        status = displayStatus,
+        data = data,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+        expiresAt = expiresAt,
+    )
+}

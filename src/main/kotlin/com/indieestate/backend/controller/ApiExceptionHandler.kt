@@ -1,5 +1,6 @@
 package com.indieestate.backend.controller
 
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail
 import org.springframework.http.ResponseEntity
@@ -11,6 +12,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 @RestControllerAdvice
 class GlobalExceptionHandler {
+    private val log = LoggerFactory.getLogger(javaClass)
 
     @ExceptionHandler(ApiException::class)
     fun handleApi(ex: ApiException): ResponseEntity<ProblemDetail> {
@@ -46,5 +48,16 @@ class GlobalExceptionHandler {
         )
         problem.title = "Bad Request"
         return ResponseEntity.badRequest().body(problem)
+    }
+
+    @ExceptionHandler(Exception::class)
+    fun handleUnexpected(ex: Exception): ResponseEntity<ProblemDetail> {
+        log.error("Unhandled server error", ex)
+        val problem = ProblemDetail.forStatusAndDetail(
+            HttpStatus.INTERNAL_SERVER_ERROR,
+            ex.message?.takeIf { it.isNotBlank() } ?: "Unexpected server error",
+        )
+        problem.title = "Internal Server Error"
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(problem)
     }
 }

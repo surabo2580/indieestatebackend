@@ -49,7 +49,7 @@ auth:
     ttl-seconds: ${AUTH_OTP_TTL_SECONDS:300}
     length: ${AUTH_OTP_LENGTH:6}
     dev-mode: ${AUTH_OTP_DEV_MODE:true}
-    dev-fixed-code: ${AUTH_OTP_DEV_FIXED_CODE:}
+    dev-otp: "${AUTH_OTP_DEV_OTP:}"
     redis-enabled: ${AUTH_OTP_REDIS_ENABLED:false}
     sms-provider: ${AUTH_OTP_SMS_PROVIDER:logging}
     max-verify-attempts: ${AUTH_OTP_MAX_VERIFY_ATTEMPTS:5}

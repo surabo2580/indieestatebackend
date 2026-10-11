@@ -11,6 +11,7 @@ import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
@@ -46,4 +47,18 @@ class AdController(
     @Operation(summary = "List ads posted by the current user")
     fun listMine(@AuthenticationPrincipal principal: UserPrincipal): List<AdResponse> =
         adService.listMine(principal.userId)
+
+    @PostMapping("/{id}/sold")
+    @Operation(summary = "Mark one of the current user's ads as sold")
+    fun markSold(
+        @AuthenticationPrincipal principal: UserPrincipal,
+        @PathVariable id: UUID,
+    ): AdResponse = adService.markSold(principal.userId, id)
+
+    @PostMapping("/{id}/republish")
+    @Operation(summary = "Republish one of the current user's ads")
+    fun republish(
+        @AuthenticationPrincipal principal: UserPrincipal,
+        @PathVariable id: UUID,
+    ): AdResponse = adService.republish(principal.userId, id)
 }

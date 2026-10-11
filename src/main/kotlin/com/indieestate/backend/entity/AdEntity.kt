@@ -37,4 +37,6 @@ class AdEntity(
 
 object AdStatus {
     const val ACTIVE = "ACTIVE"
+    const val SOLD = "SOLD"
+    const val LISTING_DAYS = 30L
 }
