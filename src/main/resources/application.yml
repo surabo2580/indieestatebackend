@@ -44,6 +44,13 @@ spring:
 server:
   port: ${PORT:8080}
 
+auth:
+  otp:
+    ttl-seconds: ${AUTH_OTP_TTL_SECONDS:300}
+    length: ${AUTH_OTP_LENGTH:6}
+    dev-mode: ${AUTH_OTP_DEV_MODE:true}
+    dev-fixed-code: ${AUTH_OTP_DEV_FIXED_CODE:}
+
 security:
   jwt:
     secret: ${JWT_SECRET:change-me-in-prod-at-least-32-chars}

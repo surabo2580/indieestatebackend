@@ -4,7 +4,9 @@ import com.indieestate.backend.dto.FormField
 import com.indieestate.backend.dto.FormSchema
 import org.springframework.stereotype.Component
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
+import java.time.format.ResolverStyle
 
 @Component
 class FormSchemaValidator {
@@ -73,7 +75,8 @@ class FormSchemaValidator {
 
     private fun validateMultiSelect(field: FormField, value: Any?, errors: MutableMap<String, String>) {
         val selected = when (value) {
-            is Collection<*> -> value.mapNotNull { it?.toString() }
+            is Collection<*> -> value.mapNotNull { it?.toString()?.trim() }.filter { it.isNotEmpty() }
+            is String -> value.split(",").map { it.trim() }.filter { it.isNotEmpty() }
             else -> {
                 errors[field.key] = "${field.label} must be a list"
                 return
@@ -93,21 +96,52 @@ class FormSchemaValidator {
     }
 
     private fun validateBoolean(field: FormField, value: Any?, errors: MutableMap<String, String>) {
-        if (value !is Boolean) {
-            errors[field.key] = "${field.label} must be true or false"
+        when (value) {
+            is Boolean -> Unit
+            is String -> {
+                if (!value.equals("true", ignoreCase = true) && !value.equals("false", ignoreCase = true)) {
+                    errors[field.key] = "${field.label} must be true or false"
+                }
+            }
+            else -> errors[field.key] = "${field.label} must be true or false"
         }
     }
 
     private fun validateDate(field: FormField, value: Any?, errors: MutableMap<String, String>) {
-        if (value !is String) {
-            errors[field.key] = "${field.label} must be a date (YYYY-MM-DD)"
+        val text = value?.toString()?.trim().orEmpty()
+        if (text.isEmpty()) {
+            if (field.required) errors[field.key] = "${field.label} is required"
             return
         }
-        try {
-            LocalDate.parse(value)
-        } catch (_: DateTimeParseException) {
+        val parsed = parseFlexibleDate(text)
+        if (parsed == null) {
             errors[field.key] = "${field.label} must be a date (YYYY-MM-DD)"
         }
+    }
+
+    private fun parseFlexibleDate(text: String): LocalDate? {
+        try {
+            return LocalDate.parse(text)
+        } catch (_: DateTimeParseException) {
+            // fall through
+        }
+        val patterns = listOf(
+            "d-M-uuuu",
+            "d-M-uu",
+            "dd-MM-uuuu",
+            "dd-MM-uu",
+            "dd/MM/yyyy",
+            "dd/MM/yy",
+        )
+        for (pattern in patterns) {
+            try {
+                val formatter = DateTimeFormatter.ofPattern(pattern).withResolverStyle(ResolverStyle.SMART)
+                return LocalDate.parse(text, formatter)
+            } catch (_: DateTimeParseException) {
+                continue
+            }
+        }
+        return null
     }
 
     private fun toDouble(value: Any?): Double? = when (value) {

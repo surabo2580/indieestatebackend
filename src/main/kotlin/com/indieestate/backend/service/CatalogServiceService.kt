@@ -31,6 +31,13 @@ class CatalogServiceService(
     }
 
     @Transactional(readOnly = true)
+    fun serviceScopeIds(serviceId: UUID): List<UUID> {
+        requireActive(serviceId)
+        val children = serviceRepository.findAllByIsActiveTrueAndParentIdOrderBySortOrderAsc(serviceId)
+        return listOf(serviceId) + children.map { it.id }
+    }
+
+    @Transactional(readOnly = true)
     fun requireActive(id: UUID): ServiceEntity =
         serviceRepository.findById(id)
             .filter { it.isActive }

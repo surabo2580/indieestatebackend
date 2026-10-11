@@ -23,10 +23,13 @@ class JwtAuthenticationFilter(
             path.startsWith("/api/categories") ||
             path.startsWith("/api/services") ||
             path.startsWith("/api/forms") ||
+            (request.method == "GET" && path == "/api/ads") ||
             path.startsWith("/api/reels/media") ||
             ((request.method == "GET" || request.method == "HEAD") && path.startsWith("/api/reels")) ||
             path == "/api/auth/register" ||
-            path == "/api/auth/login"
+            path == "/api/auth/login" ||
+            path == "/api/auth/otp/send" ||
+            path == "/api/auth/otp/verify"
     }
 
     override fun doFilterInternal(

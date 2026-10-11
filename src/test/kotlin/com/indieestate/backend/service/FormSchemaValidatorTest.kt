@@ -33,6 +33,27 @@ class FormSchemaValidatorTest {
     }
 
     @Test
+    fun `accepts multiselect as json array or comma string`() {
+        val schema = FormSchema(
+            fields = listOf(
+                FormField(
+                    key = "skills",
+                    label = "Skills",
+                    type = "multiselect",
+                    required = true,
+                    options = listOf("Java", "Kotlin"),
+                ),
+            ),
+        )
+        assertTrue(
+            validator.validate(schema, mapOf("skills" to listOf("Java"))).isEmpty(),
+        )
+        assertTrue(
+            validator.validate(schema, mapOf("skills" to "Java,Kotlin")).isEmpty(),
+        )
+    }
+
+    @Test
     fun `reports required and type errors`() {
         val errors = validator.validate(
             schema,

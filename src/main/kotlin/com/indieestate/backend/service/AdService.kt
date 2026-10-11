@@ -19,6 +19,7 @@ class AdService(
     private val categoryService: CategoryService,
     private val catalogServiceService: CatalogServiceService,
     private val formSchemaValidator: FormSchemaValidator,
+    private val formDataNormalizer: FormDataNormalizer,
 ) {
 
     @Transactional
@@ -34,7 +35,8 @@ class AdService(
             catalogServiceService.requireActive(serviceId)
         }
 
-        val errors = formSchemaValidator.validate(form.schema, request.data)
+        val normalizedData = formDataNormalizer.normalize(form.schema, request.data)
+        val errors = formSchemaValidator.validate(form.schema, normalizedData)
         if (errors.isNotEmpty()) {
             throw ApiException(
                 status = HttpStatus.BAD_REQUEST,
@@ -52,7 +54,7 @@ class AdService(
                 serviceId = serviceId,
                 title = request.title.trim(),
                 status = AdStatus.ACTIVE,
-                data = request.data,
+                data = normalizedData,
                 updatedAt = now,
             ),
         )
@@ -63,24 +65,62 @@ class AdService(
     fun listMine(userId: UUID): List<AdResponse> =
         adRepository.findAllByUserIdOrderByCreatedAtDesc(userId).map { it.toResponse() }
 
-    private fun resolveCategory(formCategoryId: UUID?, requested: UUID?): UUID? {
-        if (requested != null && formCategoryId != null && requested != formCategoryId) {
-            throw ApiException(HttpStatus.BAD_REQUEST, "categoryId does not match the selected form")
+    @Transactional(readOnly = true)
+    fun listActive(categoryId: UUID?, serviceId: UUID?): List<AdResponse> {
+        val ads = when {
+            categoryId != null -> {
+                val scope = categoryService.categoryScopeIds(categoryId)
+                adRepository.findAllByStatusAndCategoryIdInOrderByCreatedAtDesc(AdStatus.ACTIVE, scope)
+            }
+            serviceId != null -> {
+                val scope = catalogServiceService.serviceScopeIds(serviceId)
+                adRepository.findAllByStatusAndServiceIdInOrderByCreatedAtDesc(AdStatus.ACTIVE, scope)
+            }
+            else -> emptyList()
         }
+        return ads.map { it.toResponse() }
+    }
+
+    private fun resolveCategory(formCategoryId: UUID?, requested: UUID?): UUID? {
         if (requested != null && formCategoryId == null) {
             throw ApiException(HttpStatus.BAD_REQUEST, "This form is not linked to a category")
         }
-        return requested ?: formCategoryId
+        if (requested == null) return formCategoryId
+        if (formCategoryId == null) return requested
+        if (requested == formCategoryId || isCategoryUnderAncestor(requested, formCategoryId)) {
+            return requested
+        }
+        throw ApiException(HttpStatus.BAD_REQUEST, "categoryId does not match the selected form")
     }
 
     private fun resolveService(formServiceId: UUID?, requested: UUID?): UUID? {
-        if (requested != null && formServiceId != null && requested != formServiceId) {
-            throw ApiException(HttpStatus.BAD_REQUEST, "serviceId does not match the selected form")
-        }
         if (requested != null && formServiceId == null) {
             throw ApiException(HttpStatus.BAD_REQUEST, "This form is not linked to a service")
         }
-        return requested ?: formServiceId
+        if (requested == null) return formServiceId
+        if (formServiceId == null) return requested
+        if (requested == formServiceId || isServiceUnderAncestor(requested, formServiceId)) {
+            return requested
+        }
+        throw ApiException(HttpStatus.BAD_REQUEST, "serviceId does not match the selected form")
+    }
+
+    private fun isCategoryUnderAncestor(categoryId: UUID, ancestorId: UUID): Boolean {
+        var current = categoryService.requireActive(categoryId)
+        while (current.parentId != null) {
+            if (current.parentId == ancestorId) return true
+            current = categoryService.requireActive(current.parentId!!)
+        }
+        return false
+    }
+
+    private fun isServiceUnderAncestor(serviceId: UUID, ancestorId: UUID): Boolean {
+        var current = catalogServiceService.requireActive(serviceId)
+        while (current.parentId != null) {
+            if (current.parentId == ancestorId) return true
+            current = catalogServiceService.requireActive(current.parentId!!)
+        }
+        return false
     }
 }
 

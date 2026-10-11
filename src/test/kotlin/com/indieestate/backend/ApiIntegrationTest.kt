@@ -139,6 +139,14 @@ class ApiIntegrationTest {
             status { isOk() }
             jsonPath("$.length()") { value(1) }
         }
+
+        mockMvc.get("/api/ads") {
+            param("categoryId", "0a1c0001-0000-4000-8000-000000000002")
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.length()") { value(1) }
+            jsonPath("$[0].title") { value("Honda City 2018") }
+        }
     }
 
     @Test

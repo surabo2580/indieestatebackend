@@ -18,6 +18,7 @@ class UserEntity(
     var passwordHash: String = "",
     @Column(nullable = false)
     var name: String = "",
+    @Column(unique = true)
     var phone: String? = null,
     @Column(name = "created_at", nullable = false)
     val createdAt: Instant = Instant.now(),

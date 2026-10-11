@@ -31,6 +31,14 @@ class CategoryService(
             .map { it.toResponse() }
     }
 
+    /** Category id plus direct child category ids (for listing ads on parent and leaf pages). */
+    @Transactional(readOnly = true)
+    fun categoryScopeIds(categoryId: UUID): List<UUID> {
+        requireActive(categoryId)
+        val children = categoryRepository.findAllByIsActiveTrueAndParentIdOrderBySortOrderAsc(categoryId)
+        return listOf(categoryId) + children.map { it.id }
+    }
+
     @Transactional
     fun create(request: CreateCategoryRequest): CategoryResponse {
         val slug = (request.slug ?: request.name)

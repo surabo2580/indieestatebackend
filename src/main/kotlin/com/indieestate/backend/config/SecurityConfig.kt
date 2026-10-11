@@ -82,6 +82,7 @@ class SecurityConfig(
                     "/api/services/**",
                     "/api/forms",
                     "/api/forms/**",
+                    "/api/ads",
                     "/api/reels",
                     "/api/reels/**",
                     "/api/health",
@@ -95,6 +96,8 @@ class SecurityConfig(
                 auth.requestMatchers(
                     "/api/auth/register",
                     "/api/auth/login",
+                    "/api/auth/otp/send",
+                    "/api/auth/otp/verify",
                     "/actuator/health",
                     "/actuator/health/**",
                     "/actuator/info",
