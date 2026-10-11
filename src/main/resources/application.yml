@@ -50,6 +50,21 @@ auth:
     length: ${AUTH_OTP_LENGTH:6}
     dev-mode: ${AUTH_OTP_DEV_MODE:true}
     dev-fixed-code: ${AUTH_OTP_DEV_FIXED_CODE:}
+    redis-enabled: ${AUTH_OTP_REDIS_ENABLED:false}
+    sms-provider: ${AUTH_OTP_SMS_PROVIDER:logging}
+    max-verify-attempts: ${AUTH_OTP_MAX_VERIFY_ATTEMPTS:5}
+    send-rate-limit-per-phone: ${AUTH_OTP_SEND_RATE_LIMIT_PHONE:5}
+    send-rate-limit-per-ip: ${AUTH_OTP_SEND_RATE_LIMIT_IP:30}
+    send-rate-window-seconds: ${AUTH_OTP_SEND_RATE_WINDOW:900}
+    msg91:
+      auth-key: ${MSG91_AUTH_KEY:}
+      template-id: ${MSG91_TEMPLATE_ID:}
+      sender-id: ${MSG91_SENDER_ID:}
+      country-code: ${MSG91_COUNTRY_CODE:91}
+    twilio:
+      account-sid: ${TWILIO_ACCOUNT_SID:}
+      auth-token: ${TWILIO_AUTH_TOKEN:}
+      from-number: ${TWILIO_FROM_NUMBER:}
 
 security:
   jwt:

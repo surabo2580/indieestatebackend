@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
+import jakarta.servlet.http.HttpServletRequest
 
 @RestController
 @RequestMapping("/api/auth")
@@ -44,8 +45,11 @@ class AuthController(
 
     @PostMapping("/otp/send")
     @Operation(summary = "Send login OTP to a mobile number")
-    fun sendOtp(@Valid @RequestBody request: OtpSendRequest): OtpSendResponse =
-        otpAuthService.sendOtp(request.phone)
+    fun sendOtp(
+        @Valid @RequestBody request: OtpSendRequest,
+        servletRequest: HttpServletRequest,
+    ): OtpSendResponse =
+        otpAuthService.sendOtp(request.phone, clientIp(servletRequest))
 
     @PostMapping("/otp/verify")
     @Operation(summary = "Verify OTP and receive access token")
@@ -57,4 +61,11 @@ class AuthController(
     @Operation(summary = "Current user profile")
     fun me(@AuthenticationPrincipal principal: UserPrincipal): UserResponse =
         authService.me(principal.userId)
+
+    private fun clientIp(request: HttpServletRequest): String? =
+        request.getHeader("X-Forwarded-For")
+            ?.substringBefore(",")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: request.remoteAddr
 }
