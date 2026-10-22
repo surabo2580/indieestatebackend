@@ -44,6 +44,10 @@ spring:
 server:
   port: ${PORT:8080}
 
+logging:
+  level:
+    reel-upload: DEBUG
+
 auth:
   otp:
     ttl-seconds: ${AUTH_OTP_TTL_SECONDS:300}
@@ -77,6 +81,8 @@ app:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:*}
   reels:
     upload-dir: ${REELS_UPLOAD_DIR:uploads/reels}
+    skip-s3: ${REELS_SKIP_S3:false}
+    allow-direct-upload: ${REELS_ALLOW_DIRECT_UPLOAD:false}
     s3-bucket: ${REELS_S3_BUCKET:}
     s3-region: ${AWS_REGION:ap-south-1}
     cdn-base-url: ${REELS_CDN_BASE_URL:}

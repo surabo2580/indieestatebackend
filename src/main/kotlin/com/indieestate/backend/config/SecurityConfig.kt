@@ -84,6 +84,8 @@ class SecurityConfig(
                     "/api/forms",
                     "/api/forms/**",
                     "/api/ads",
+                    "/api/community",
+                    "/api/community/**",
                     "/api/reels",
                     "/api/reels/**",
                     "/api/health",

@@ -25,6 +25,7 @@ class JwtAuthenticationFilter(
             path.startsWith("/api/services") ||
             path.startsWith("/api/forms") ||
             (request.method == "GET" && path == "/api/ads") ||
+            (request.method == "GET" && path.startsWith("/api/community")) ||
             path.startsWith("/api/reels/media") ||
             ((request.method == "GET" || request.method == "HEAD") && path.startsWith("/api/reels")) ||
             path == "/api/auth/register" ||

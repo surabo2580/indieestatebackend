@@ -20,8 +20,22 @@ class FormService(
     fun list(categoryId: UUID?, serviceId: UUID?, code: String?): List<FormResponse> {
         val forms = when {
             !code.isNullOrBlank() -> listOfNotNull(formRepository.findByCodeIgnoreCaseAndIsActiveTrue(code.trim()))
-            categoryId != null -> formRepository.findAllByCategoryIdInAndIsActiveTrue(categoryLookupIds(categoryId))
-            serviceId != null -> formRepository.findAllByServiceIdInAndIsActiveTrue(serviceLookupIds(serviceId))
+            categoryId != null -> {
+                val ids = categoryLookupIds(categoryId)
+                formRepository.findAllByCategoryIdInAndIsActiveTrue(ids)
+                    .sortedWith(
+                        compareByDescending<FormEntity> { it.categoryId == categoryId }
+                            .thenBy { it.code },
+                    )
+            }
+            serviceId != null -> {
+                val ids = serviceLookupIds(serviceId)
+                formRepository.findAllByServiceIdInAndIsActiveTrue(ids)
+                    .sortedWith(
+                        compareByDescending<FormEntity> { it.serviceId == serviceId }
+                            .thenBy { it.code },
+                    )
+            }
             else -> formRepository.findAllByIsActiveTrueOrderByCodeAsc()
         }
         return forms.map { it.toResponse() }

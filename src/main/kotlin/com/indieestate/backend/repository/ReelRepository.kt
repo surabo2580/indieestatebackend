@@ -6,5 +6,6 @@ import java.util.UUID
 
 interface ReelRepository : JpaRepository<ReelEntity, UUID> {
     fun findAllByIsActiveTrueAndStatusOrderByCreatedAtDesc(status: String): List<ReelEntity>
+    fun findAllByIsActiveTrueAndStatusInOrderByCreatedAtDesc(statuses: Collection<String>): List<ReelEntity>
     fun findFirstByVideoId(videoId: UUID): ReelEntity?
 }

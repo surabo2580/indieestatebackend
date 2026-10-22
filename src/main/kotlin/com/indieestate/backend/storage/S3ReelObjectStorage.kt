@@ -1,5 +1,6 @@
 package com.indieestate.backend.storage
 
+import com.indieestate.backend.reel.ReelUploadLog
 import software.amazon.awssdk.core.sync.RequestBody
 import software.amazon.awssdk.core.sync.ResponseTransformer
 import software.amazon.awssdk.services.s3.S3Client
@@ -18,19 +19,27 @@ class S3ReelObjectStorage(
     private val presigner: S3Presigner,
     private val bucket: String,
     private val cdnBaseUrl: String,
+    private val defaultEncryption: S3DefaultEncryption = S3DefaultEncryption(),
 ) : ReelObjectStorage {
 
-    override fun presignPut(objectKey: String, contentType: String): String {
-        val put = PutObjectRequest.builder()
+    override fun presignPut(objectKey: String, contentType: String): PresignedUpload {
+        @Suppress("UNUSED_PARAMETER")
+        val ignoredContentType = contentType
+        val putBuilder = PutObjectRequest.builder()
             .bucket(bucket)
             .key(objectKey)
-            .contentType(contentType)
-            .build()
+        defaultEncryption.applyTo(putBuilder)
+        val put = putBuilder.build()
         val request = PutObjectPresignRequest.builder()
             .signatureDuration(Duration.ofMinutes(15))
             .putObjectRequest(put)
             .build()
-        return presigner.presignPutObject(request).url().toString()
+        val url = presigner.presignPutObject(request).url()
+        val headers = defaultEncryption.uploadHeaders()
+        ReelUploadLog.debug(
+            "presigned PUT bucket=$bucket key=$objectKey host=${url.host} sseHeaders=${headers.keys} expiresIn=15m",
+        )
+        return PresignedUpload(url = url.toString(), headers = headers)
     }
 
     override fun exists(objectKey: String): Boolean = try {
@@ -48,14 +57,12 @@ class S3ReelObjectStorage(
     }
 
     override fun put(objectKey: String, bytes: ByteArray, contentType: String) {
-        s3.putObject(
-            PutObjectRequest.builder()
-                .bucket(bucket)
-                .key(objectKey)
-                .contentType(contentType)
-                .build(),
-            RequestBody.fromBytes(bytes),
-        )
+        val builder = PutObjectRequest.builder()
+            .bucket(bucket)
+            .key(objectKey)
+            .contentType(contentType)
+        defaultEncryption.applyTo(builder)
+        s3.putObject(builder.build(), RequestBody.fromBytes(bytes))
     }
 
     override fun download(objectKey: String, destination: Path) {
@@ -69,14 +76,12 @@ class S3ReelObjectStorage(
     }
 
     override fun upload(objectKey: String, source: Path, contentType: String) {
-        s3.putObject(
-            PutObjectRequest.builder()
-                .bucket(bucket)
-                .key(objectKey)
-                .contentType(contentType)
-                .build(),
-            RequestBody.fromFile(source),
-        )
+        val builder = PutObjectRequest.builder()
+            .bucket(bucket)
+            .key(objectKey)
+            .contentType(contentType)
+        defaultEncryption.applyTo(builder)
+        s3.putObject(builder.build(), RequestBody.fromFile(source))
     }
 
     override fun publicUrl(objectKey: String): String {

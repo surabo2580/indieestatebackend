@@ -31,6 +31,15 @@ data class CreateReelRequest(
     val thumbnailHex: String? = null,
 )
 
+/** Tells clients how to upload: scalable presigned S3 vs dev-only multipart. */
+data class ReelUploadConfigResponse(
+    val strategy: String,
+    val bucket: String? = null,
+    val region: String? = null,
+    val cdnBaseUrl: String? = null,
+    val message: String? = null,
+)
+
 data class CreateReelUploadRequest(
     @field:NotBlank
     @field:Size(max = 255)
@@ -44,6 +53,8 @@ data class CreateReelUploadResponse(
     val objectKey: String,
     val uploadUrl: String,
     val contentType: String,
+    /** Must be sent on the S3 PUT (e.g. default bucket SSE-KMS). */
+    val uploadHeaders: Map<String, String> = emptyMap(),
 )
 
 data class CompleteReelRequest(

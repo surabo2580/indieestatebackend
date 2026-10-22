@@ -5,6 +5,7 @@ import com.indieestate.backend.dto.CreateReelRequest
 import com.indieestate.backend.dto.CreateReelUploadRequest
 import com.indieestate.backend.dto.CreateReelUploadResponse
 import com.indieestate.backend.dto.ReelResponse
+import com.indieestate.backend.dto.ReelUploadConfigResponse
 import com.indieestate.backend.security.UserPrincipal
 import com.indieestate.backend.media.VideoEventPublisher
 import com.indieestate.backend.media.VideoUploadedEvent
@@ -49,6 +50,10 @@ class ReelController(
     @GetMapping
     @Operation(summary = "List active video reels for the Play screen")
     fun list(): List<ReelResponse> = reelService.listActive()
+
+    @GetMapping("/upload-config")
+    @Operation(summary = "Upload strategy for clients (presigned S3 vs dev-only multipart)")
+    fun uploadConfig(): ReelUploadConfigResponse = reelService.uploadConfig()
 
     @GetMapping("/media/{filename}")
     @Operation(summary = "Stream an uploaded reel video")

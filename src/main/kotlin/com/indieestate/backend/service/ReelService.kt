@@ -7,18 +7,22 @@ import com.indieestate.backend.dto.CreateReelUploadRequest
 import com.indieestate.backend.dto.CreateReelUploadResponse
 import com.indieestate.backend.dto.ReelCommentResponse
 import com.indieestate.backend.dto.ReelResponse
+import com.indieestate.backend.dto.ReelUploadConfigResponse
 import com.indieestate.backend.entity.ReelEntity
 import com.indieestate.backend.entity.ReelStatus
 import com.indieestate.backend.entity.UserEntity
 import com.indieestate.backend.entity.VideoEntity
 import com.indieestate.backend.entity.VideoStatus
 import com.indieestate.backend.feed.ReelFeedCache
+import com.indieestate.backend.reel.ReelUploadLog
 import com.indieestate.backend.media.VideoObjectKeys
 import com.indieestate.backend.repository.ReelRepository
 import com.indieestate.backend.repository.UserRepository
 import com.indieestate.backend.repository.VideoRepository
+import com.indieestate.backend.storage.FakeReelObjectStorage
 import com.indieestate.backend.storage.ReelObjectStorage
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import software.amazon.awssdk.services.s3.model.S3Exception
 import org.springframework.stereotype.Service
@@ -34,8 +38,34 @@ class ReelService(
     private val reelMediaStore: ReelMediaStore,
     private val storage: ReelObjectStorage,
     private val feedCache: ReelFeedCache,
+    @param:Value("\${app.reels.skip-s3:false}") private val skipS3: Boolean,
+    @param:Value("\${app.reels.allow-direct-upload:false}") private val allowDirectUpload: Boolean,
+    @param:Value("\${app.reels.s3-bucket:}") private val s3Bucket: String,
+    @param:Value("\${app.reels.s3-region:ap-south-1}") private val s3Region: String,
+    @param:Value("\${app.reels.cdn-base-url:}") private val cdnBaseUrl: String,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
+
+    fun uploadConfig(): ReelUploadConfigResponse {
+        if (allowDirectUpload && (skipS3 || storage is FakeReelObjectStorage)) {
+            return ReelUploadConfigResponse(
+                strategy = STRATEGY_DIRECT_MULTIPART,
+                message = "Dev-only: uploads go through the API. Set REELS_ALLOW_DIRECT_UPLOAD=false for production.",
+            )
+        }
+        val bucketHint = s3Bucket.trim().takeIf { it.isNotEmpty() }
+        return ReelUploadConfigResponse(
+            strategy = STRATEGY_PRESIGNED_S3,
+            bucket = bucketHint,
+            region = s3Region,
+            cdnBaseUrl = cdnBaseUrl.trim().takeIf { it.isNotEmpty() },
+            message = when {
+                bucketHint == null -> "Set REELS_S3_BUCKET and AWS credentials in .env (see docs/REELS_ARCHITECTURE.md)."
+                skipS3 -> "REELS_SKIP_S3=true blocks presigned upload. Set REELS_SKIP_S3=false for production."
+                else -> null
+            },
+        )
+    }
 
     @Transactional
     fun create(userId: UUID, request: CreateReelRequest): ReelResponse {
@@ -62,6 +92,13 @@ class ReelService(
 
     @Transactional
     fun createUpload(userId: UUID, request: CreateReelUploadRequest): CreateReelUploadResponse {
+        val config = uploadConfig()
+        if (config.strategy != STRATEGY_PRESIGNED_S3) {
+            throw ApiException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "Presigned S3 upload is not active. GET /api/reels/upload-config — use DIRECT_MULTIPART only in dev.",
+            )
+        }
         userRepository.findById(userId).orElseThrow {
             ApiException(HttpStatus.UNAUTHORIZED, "User not found")
         }
@@ -81,9 +118,13 @@ class ReelService(
                 originalKey = objectKey,
             ),
         )
-        val uploadUrl = try {
+        ReelUploadLog.info(
+            "createUpload userId=$userId videoId=$videoId objectKey=$objectKey contentType=$contentType fileName=$fileName",
+        )
+        val presigned = try {
             storage.presignPut(objectKey, contentType)
         } catch (error: S3Exception) {
+            ReelUploadLog.error("presign failed objectKey=$objectKey awsStatus=${error.statusCode()}", error)
             log.error("Failed to presign S3 upload for {}", objectKey, error)
             throw ApiException(
                 HttpStatus.BAD_GATEWAY,
@@ -96,11 +137,15 @@ class ReelService(
                 "Could not prepare S3 upload: ${error.message ?: "unknown error"}",
             )
         }
+        ReelUploadLog.debug(
+            "createUpload ok videoId=$videoId objectKey=$objectKey uploadHeaderKeys=${presigned.headers.keys}",
+        )
         return CreateReelUploadResponse(
             videoId = videoId,
             objectKey = objectKey,
-            uploadUrl = uploadUrl,
+            uploadUrl = presigned.url,
             contentType = contentType,
+            uploadHeaders = presigned.headers,
         )
     }
 
@@ -119,7 +164,10 @@ class ReelService(
         if (objectKey != video.originalKey) {
             throw ApiException(HttpStatus.BAD_REQUEST, "Invalid upload key")
         }
-        if (!storage.exists(objectKey)) {
+        val exists = storage.exists(objectKey)
+        ReelUploadLog.info("complete videoId=${request.videoId} objectKey=$objectKey s3ObjectExists=$exists")
+        if (!exists) {
+            ReelUploadLog.warn("complete rejected: no object at $objectKey (phone PUT may have failed with 403)")
             throw ApiException(HttpStatus.BAD_REQUEST, "Upload the video before completing the reel")
         }
         reelRepository.findFirstByVideoId(video.id)?.let { existing ->
@@ -156,6 +204,12 @@ class ReelService(
         thumbnailHex: String?,
         video: MultipartFile,
     ): ReelResponse {
+        if (uploadConfig().strategy != STRATEGY_DIRECT_MULTIPART) {
+            throw ApiException(
+                HttpStatus.NOT_FOUND,
+                "Direct multipart upload is disabled. Use presigned S3 (GET /api/reels/upload-config).",
+            )
+        }
         val user = userRepository.findById(userId).orElseThrow {
             ApiException(HttpStatus.UNAUTHORIZED, "User not found")
         }
@@ -187,7 +241,9 @@ class ReelService(
     @Transactional(readOnly = true)
     fun listActive(): List<ReelResponse> {
         feedCache.get()?.let { return it }
-        val reels = reelRepository.findAllByIsActiveTrueAndStatusOrderByCreatedAtDesc(ReelStatus.READY)
+        val reels = reelRepository.findAllByIsActiveTrueAndStatusInOrderByCreatedAtDesc(
+            listOf(ReelStatus.READY, ReelStatus.PROCESSING),
+        )
         if (reels.isEmpty()) {
             feedCache.put(emptyList())
             return emptyList()
@@ -201,6 +257,12 @@ class ReelService(
         return response
     }
 }
+
+const val REEL_UPLOAD_PRESIGNED_S3: String = "PRESIGNED_S3"
+const val REEL_UPLOAD_DIRECT_MULTIPART: String = "DIRECT_MULTIPART"
+
+private const val STRATEGY_PRESIGNED_S3 = REEL_UPLOAD_PRESIGNED_S3
+private const val STRATEGY_DIRECT_MULTIPART = REEL_UPLOAD_DIRECT_MULTIPART
 
 private val ALLOWED_VIDEO_EXTENSIONS = setOf("mp4", "mov", "webm", "m4v")
 

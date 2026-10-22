@@ -9,8 +9,8 @@ class FakeReelObjectStorage(
 ) : ReelObjectStorage {
     private val objects = ConcurrentHashMap<String, ByteArray>()
 
-    override fun presignPut(objectKey: String, contentType: String): String =
-        "https://cdn.test/upload/${objectKey.trimStart('/')}"
+    override fun presignPut(objectKey: String, contentType: String): PresignedUpload =
+        PresignedUpload(url = "https://cdn.test/upload/${objectKey.trimStart('/')}")
 
     override fun exists(objectKey: String): Boolean = objects.containsKey(objectKey)
 

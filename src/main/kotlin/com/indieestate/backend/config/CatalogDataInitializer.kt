@@ -1,23 +1,20 @@
 package com.indieestate.backend.config
 
-import com.indieestate.backend.dto.FormField
-import com.indieestate.backend.dto.FormSchema
 import com.indieestate.backend.entity.CategoryEntity
-import com.indieestate.backend.entity.FormEntity
 import com.indieestate.backend.entity.ServiceEntity
 import com.indieestate.backend.repository.CategoryRepository
-import com.indieestate.backend.repository.FormRepository
 import com.indieestate.backend.repository.ServiceRepository
 import org.springframework.boot.ApplicationArguments
 import org.springframework.boot.ApplicationRunner
+import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
 import java.util.UUID
 
 @Component
+@Order(10)
 class CatalogDataInitializer(
     private val categoryRepository: CategoryRepository,
     private val serviceRepository: ServiceRepository,
-    private val formRepository: FormRepository,
 ) : ApplicationRunner {
 
     override fun run(args: ApplicationArguments) {
@@ -71,28 +68,6 @@ class CatalogDataInitializer(
                 service("0a1c0002-0000-4000-8000-000000000042", "car-wash-sedan", "Sedan", "local_car_wash", 2, carWash.id),
                 service("0a1c0002-0000-4000-8000-000000000043", "car-wash-suv", "SUV", "local_car_wash", 3, carWash.id),
                 service("0a1c0002-0000-4000-8000-000000000044", "car-wash-bike", "Bike wash", "two_wheeler", 4, carWash.id),
-            ),
-        )
-
-        formRepository.save(
-            FormEntity(
-                id = UUID.fromString("0a1c0003-0000-4000-8000-000000000002"),
-                code = "CAR_SELL",
-                type = "SELL",
-                categoryId = cars.id,
-                title = "Sell a car",
-                schema = FormSchema(
-                    fields = listOf(
-                        FormField("title", "Ad title", "text", required = true, maxLength = 80),
-                        FormField("price", "Price", "number", required = true, min = 0.0),
-                        FormField("brand", "Brand", "select", required = true, options = listOf("Maruti", "Hyundai", "Honda", "Tata", "Mahindra", "Toyota", "Other")),
-                        FormField("model", "Model", "text", required = true, maxLength = 80),
-                        FormField("year", "Year", "number", required = true, min = 1990.0, max = 2030.0),
-                        FormField("kmDriven", "KM driven", "number", required = true, min = 0.0),
-                        FormField("fuel", "Fuel", "select", required = true, options = listOf("Petrol", "Diesel", "CNG", "Electric", "Hybrid")),
-                        FormField("description", "Description", "textarea", required = false, maxLength = 2000),
-                    ),
-                ),
             ),
         )
     }

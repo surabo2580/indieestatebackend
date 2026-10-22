@@ -11,7 +11,7 @@ Setup follows the same local run pattern as RewardBackend: Homebrew PostgreSQL, 
 - PostgreSQL (default) or H2 (`h2` profile)
 - Redis (optional feed cache)
 - Kafka (optional upload → media worker)
-- Flyway for Postgres schema/seed
+- Flyway SQL under `db/migration` (optional; app uses Hibernate `ddl-auto: update` + startup seeders)
 - JWT (HS256) + BCrypt
 - OpenAPI / Swagger UI
 
@@ -72,6 +72,23 @@ Same variable names as RewardBackend:
 
 Copy `.env.example` if you want a local env file.
 
+## Data persistence (important)
+
+**Restarting `./start-backend.sh` does not delete your data.** Ads, users, chats, and custom forms live in PostgreSQL (`POSTGRES_DB`, default `indieestate`) and stay there across restarts.
+
+On startup:
+
+- **Catalog** (categories/services) is inserted only when the catalog tables are empty.
+- **Default form schemas** (`DefaultFormsInitializer`) are inserted only when a given `code` is missing — existing rows are never updated or deleted.
+
+If Sell shows “No form available”, the DB is missing those form rows (often on a fresh DB). Restart the backend once after pulling latest code, or run `scripts/seed-service-forms.sql` for service forms. User-created ads must be posted again only if the database itself was dropped or recreated (`dropdb indieestate` / new machine).
+
+**Reels (Play):** Scalable path is **presigned S3 upload → complete → transcode → CloudFront HLS**. See **`docs/REELS_ARCHITECTURE.md`**. Clients call `GET /api/reels/upload-config` (`PRESIGNED_S3` in production). Metadata is in Postgres; binaries are not stored in the JVM long-term.
+
+**Dev-only:** `REELS_ALLOW_DIRECT_UPLOAD=true` and `REELS_SKIP_S3=true` switches config to `DIRECT_MULTIPART` (legacy `POST /api/reels/upload`). Do not use in production.
+
+**403 on upload:** fix AWS IAM / bucket name — not fixed by routing video through the API. Restart backend until logs show the bucket is reachable.
+
 ## Reels: S3 + CloudFront (Play)
 
 Postgres stores video metadata only (`videos`, `video_renditions`, `reels`). The binary lives in S3. Phones upload with a presigned PUT, Kafka (or a local worker) transcodes to multi-bitrate HLS, and Play streams the master playlist from CloudFront. Media3 / AVPlayer pick 1080 / 720 / 480 / 360 from that playlist.
@@ -87,7 +104,7 @@ media/{videoId}/thumbnail/poster.jpg
 
 Video status: `UPLOADING` → `UPLOADED` → `PROCESSING` → `READY` or `FAILED`. `GET /api/reels` returns `READY` reels only. Do not put AWS keys in git.
 
-1. Create a **private** bucket (example: `indieestate-reels-uat` in `ap-south-1`). Block all public access.
+1. Create a **private** bucket (example: `indiestate-reels-uat` in `ap-south-1`). Block all public access.
 2. Bucket CORS (PUT from the app, GET from the player):
 
 ```json
@@ -117,8 +134,9 @@ Without `REELS_S3_BUCKET`, the backend uses in-memory fake storage (H2 tests). P
 4. Render the schema on the client, collect values
 5. `POST /api/auth/register` or `POST /api/auth/login`
 6. `POST /api/ads` with the JWT and filled `data`
-7. `GET /api/reels` — Play-screen feed (`READY` reels only; Redis cache when enabled)
-8. `POST /api/reels/uploads` — creates a `videos` row (`UPLOADING`) and a presigned S3 PUT to `raw/{videoId}/original.*` (JWT)
+7. `GET /api/reels/upload-config` — `PRESIGNED_S3` (production) or `DIRECT_MULTIPART` (dev only)
+8. `GET /api/reels` — Play feed (`READY` + in-flight `PROCESSING`; Redis cache when enabled)
+9. `POST /api/reels/uploads` — creates a `videos` row (`UPLOADING`) and a presigned S3 PUT to `raw/{videoId}/original.*` (JWT)
 9. `POST /api/reels/complete` — marks the video `UPLOADED`, publishes `video.uploaded`, worker writes ABR HLS (JWT)
 10. `POST /api/reels` — publish a reel from an existing URL (JWT, tests / legacy)
 11. `POST /api/reels/upload` — legacy gallery multipart through the API (JWT)
