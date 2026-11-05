@@ -9,7 +9,7 @@ import java.util.concurrent.Executors
 @Component
 @ConditionalOnProperty(name = ["app.reels.kafka-enabled"], havingValue = "false", matchIfMissing = true)
 class LocalVideoEventPublisher(
-    private val worker: MediaWorker,
+    private val mediaProcessing: MediaProcessingService,
     storage: ReelObjectStorage,
 ) : VideoEventPublisher {
     private val executor = if (storage is FakeReelObjectStorage) {
@@ -19,7 +19,7 @@ class LocalVideoEventPublisher(
     }
 
     override fun publishUploaded(event: VideoUploadedEvent) {
-        val run = Runnable { worker.processUploaded(event) }
+        val run = Runnable { mediaProcessing.processUploaded(event) }
         if (executor == null) run.run() else executor.execute(run)
     }
 }

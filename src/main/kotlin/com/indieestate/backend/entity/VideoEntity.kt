@@ -39,4 +39,5 @@ object VideoStatus {
     const val FAILED = "FAILED"
     const val READY = "READY"
     const val PUBLISHED = "PUBLISHED"
+    const val EXPIRED = "EXPIRED"
 }

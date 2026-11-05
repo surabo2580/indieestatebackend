@@ -1,5 +1,7 @@
 # Reels architecture (scalable / Instagram-style)
 
+Platform-wide mapping (creator steps 1–7, viewer step 8, scaling phases): **[ARCHITECTURE.md](ARCHITECTURE.md)**.
+
 This is the **production** path. Do not route phone video through the Spring Boot JVM in production — that does not scale.
 
 ## Flow
@@ -82,6 +84,41 @@ Your backend log `Cannot access reels bucket … Forbidden (403)` means **the IA
 
 `REELS_ALLOW_DIRECT_UPLOAD=true` + `REELS_SKIP_S3=true` exposes `DIRECT_MULTIPART` in `GET /api/reels/upload-config`. The app uploads via `POST /api/reels/upload` **only in that mode**. Never enable in production.
 
-## Scale-out (V2)
+## Production scale-out (implemented)
 
-With `REELS_KAFKA_ENABLED=true` and Redis, transcode runs on separate workers; API stays thin. Postgres remains source of truth for metadata.
+| Process | Profile | Kafka | ffmpeg |
+|---------|---------|-------|--------|
+| API | `api` | producer only (`REELS_RUN_MEDIA_WORKER=false`) | no |
+| Media worker | `worker` | consumer (`REELS_RUN_MEDIA_WORKER=true`) | yes |
+
+- Topics: `video.uploaded`, `video.processed` under `app.reels.kafka` in `application.yml`.
+- Feed: `GET /api/reels?limit=20&cursor=…` returns `{ items, nextCursor }` (Postgres is catalog; S3 is not listed).
+- Stale uploads: API job marks `UPLOADING` videos older than `REELS_UPLOAD_STALE_HOURS` as `EXPIRED` and deletes `raw/` when possible.
+- S3 lifecycle: expire incomplete `raw/` after 7–14 days in the AWS console (recommended).
+- Reconcile: `GET /api/admin/reels/storage-reconcile` with header `X-Reels-Admin-Token` (set `REELS_ADMIN_RECONCILE_TOKEN`).
+- Metrics: `reels.transcode.duration`, `reels.transcode.processed`, `reels.transcode.failed` (Actuator/Micrometer).
+- AWS deploy sketch: [infra/terraform/README.md](../infra/terraform/README.md).
+
+### Local full stack
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.app.yml up --build
+```
+
+### Local split (API on host)
+
+```bash
+docker compose up postgres redis kafka -d
+# .env: REELS_KAFKA_ENABLED=true, REELS_RUN_MEDIA_WORKER=false
+./start-backend.sh
+./scripts/start-media-worker.sh
+```
+
+### Transcode providers
+
+- `REELS_TRANSCODE_PROVIDER=ffmpeg` (default) — worker runs ffmpeg.
+- `mediaconvert` — stub for future AWS Elemental MediaConvert.
+
+## Dev-only escape hatch (reminder)
+
+`REELS_ALLOW_DIRECT_UPLOAD=true` + `REELS_SKIP_S3=true` exposes `DIRECT_MULTIPART`. Never enable in production.

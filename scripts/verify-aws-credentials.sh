@@ -1,25 +1,32 @@
 #!/usr/bin/env bash
-# Load indieestatebackend/.env and verify IAM + reels bucket access (no secrets printed).
+# Verify IAM + reels bucket. Usage: scripts/verify-aws-credentials.sh [uat|prod|local]
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-ENV_FILE="$ROOT/.env"
+ENV_NAME="${1:-local}"
+ENV_FILE="$ROOT/.env.$ENV_NAME"
+if [[ "$ENV_NAME" == "local" && -f "$ROOT/.env" ]]; then
+	ENV_FILE="$ROOT/.env"
+fi
+
 if [[ ! -f "$ENV_FILE" ]]; then
-	echo "Missing $ENV_FILE — copy from .env.example and set AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY."
+	echo "Missing $ENV_FILE — copy from environments/${ENV_NAME}.env.example"
 	exit 1
 fi
 
 echo "Loading: $ENV_FILE"
 set -a
-# shellcheck disable=SC1091
+# shellcheck disable=SC1090
 source "$ENV_FILE"
 set +a
 
 : "${AWS_REGION:=ap-south-1}"
 : "${REELS_S3_BUCKET:=indiestate-reels-uat}"
 
+echo "Environment: $ENV_NAME"
 echo "Region: $AWS_REGION"
+echo "Bucket: $REELS_S3_BUCKET"
 echo "Access key id: ${AWS_ACCESS_KEY_ID:0:4}…${AWS_ACCESS_KEY_ID: -4} (length ${#AWS_ACCESS_KEY_ID})"
 if [[ ${#AWS_ACCESS_KEY_ID} -ne 20 ]]; then
 	echo "WARN: AWS access key ids are normally 20 characters."
@@ -33,8 +40,6 @@ echo "→ sts get-caller-identity"
 if ! aws sts get-caller-identity --region "$AWS_REGION"; then
 	echo ""
 	echo "InvalidClientTokenId = wrong/deleted/rotated key, or secret does not match this access key id."
-	echo "Fix: IAM → Users → your user → Security credentials → Create access key"
-	echo "     Paste BOTH values into .env, then re-run this script."
 	exit 1
 fi
 

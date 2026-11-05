@@ -1,8 +1,7 @@
 package com.indieestate.backend.feed
 
-import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.indieestate.backend.dto.ReelResponse
+import com.indieestate.backend.dto.ReelPageResponse
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.data.redis.core.StringRedisTemplate
@@ -17,39 +16,48 @@ class RedisReelFeedCache(
 ) : ReelFeedCache {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    override fun get(): List<ReelResponse>? {
+    override fun getPage(cacheKey: String): ReelPageResponse? {
         val json = try {
-            redis.opsForValue().get(KEY)
+            redis.opsForValue().get(pageKey(cacheKey))
         } catch (error: Exception) {
             log.warn("Redis feed get failed", error)
             return null
         } ?: return null
         return try {
-            objectMapper.readValue(json, object : TypeReference<List<ReelResponse>>() {})
+            objectMapper.readValue(json, ReelPageResponse::class.java)
         } catch (error: Exception) {
             log.warn("Redis feed decode failed", error)
             null
         }
     }
 
-    override fun put(reels: List<ReelResponse>) {
+    override fun putPage(cacheKey: String, page: ReelPageResponse) {
         try {
-            redis.opsForValue().set(KEY, objectMapper.writeValueAsString(reels), TTL)
+            redis.opsForValue().set(
+                pageKey(cacheKey),
+                objectMapper.writeValueAsString(page),
+                TTL,
+            )
         } catch (error: Exception) {
             log.warn("Redis feed put failed", error)
         }
     }
 
-    override fun evict() {
+    override fun evictAll() {
         try {
-            redis.delete(KEY)
+            val keys = redis.keys("$KEY_PREFIX*")
+            if (!keys.isNullOrEmpty()) {
+                redis.delete(keys)
+            }
         } catch (error: Exception) {
             log.warn("Redis feed evict failed", error)
         }
     }
 
+    private fun pageKey(cacheKey: String) = "$KEY_PREFIX$cacheKey"
+
     companion object {
-        private const val KEY = "feed:reels:v1"
+        private const val KEY_PREFIX = "feed:reels:v2:page:"
         private val TTL = Duration.ofSeconds(30)
     }
 }

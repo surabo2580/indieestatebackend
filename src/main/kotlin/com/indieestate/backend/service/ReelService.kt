@@ -5,15 +5,15 @@ import com.indieestate.backend.dto.CompleteReelRequest
 import com.indieestate.backend.dto.CreateReelRequest
 import com.indieestate.backend.dto.CreateReelUploadRequest
 import com.indieestate.backend.dto.CreateReelUploadResponse
-import com.indieestate.backend.dto.ReelCommentResponse
 import com.indieestate.backend.dto.ReelResponse
+import com.indieestate.backend.dto.toResponse
 import com.indieestate.backend.dto.ReelUploadConfigResponse
 import com.indieestate.backend.entity.ReelEntity
 import com.indieestate.backend.entity.ReelStatus
 import com.indieestate.backend.entity.UserEntity
 import com.indieestate.backend.entity.VideoEntity
 import com.indieestate.backend.entity.VideoStatus
-import com.indieestate.backend.feed.ReelFeedCache
+import com.indieestate.backend.feed.FeedService
 import com.indieestate.backend.reel.ReelUploadLog
 import com.indieestate.backend.media.VideoObjectKeys
 import com.indieestate.backend.repository.ReelRepository
@@ -37,7 +37,7 @@ class ReelService(
     private val videoRepository: VideoRepository,
     private val reelMediaStore: ReelMediaStore,
     private val storage: ReelObjectStorage,
-    private val feedCache: ReelFeedCache,
+    private val feedService: FeedService,
     @param:Value("\${app.reels.skip-s3:false}") private val skipS3: Boolean,
     @param:Value("\${app.reels.allow-direct-upload:false}") private val allowDirectUpload: Boolean,
     @param:Value("\${app.reels.s3-bucket:}") private val s3Bucket: String,
@@ -86,7 +86,7 @@ class ReelService(
                 status = ReelStatus.READY,
             ),
         )
-        feedCache.evict()
+        feedService.evictAllPages()
         return reel.toResponse(user)
     }
 
@@ -227,7 +227,7 @@ class ReelService(
                 status = ReelStatus.READY,
             ),
         )
-        feedCache.evict()
+        feedService.evictAllPages()
         return reel.toResponse(user)
     }
 
@@ -237,25 +237,6 @@ class ReelService(
         val user = userRepository.findById(reel.userId).orElse(null)
         return reel.toResponse(user)
     }
-
-    @Transactional(readOnly = true)
-    fun listActive(): List<ReelResponse> {
-        feedCache.get()?.let { return it }
-        val reels = reelRepository.findAllByIsActiveTrueAndStatusInOrderByCreatedAtDesc(
-            listOf(ReelStatus.READY, ReelStatus.PROCESSING),
-        )
-        if (reels.isEmpty()) {
-            feedCache.put(emptyList())
-            return emptyList()
-        }
-        val users = userRepository.findAllById(reels.map { it.userId }.toSet())
-            .associateBy { it.id }
-        val response = reels.map { reel ->
-            reel.toResponse(users[reel.userId])
-        }
-        feedCache.put(response)
-        return response
-    }
 }
 
 const val REEL_UPLOAD_PRESIGNED_S3: String = "PRESIGNED_S3"
@@ -263,7 +244,6 @@ const val REEL_UPLOAD_DIRECT_MULTIPART: String = "DIRECT_MULTIPART"
 
 private const val STRATEGY_PRESIGNED_S3 = REEL_UPLOAD_PRESIGNED_S3
 private const val STRATEGY_DIRECT_MULTIPART = REEL_UPLOAD_DIRECT_MULTIPART
-
 private val ALLOWED_VIDEO_EXTENSIONS = setOf("mp4", "mov", "webm", "m4v")
 
 private fun extensionOf(name: String): String =
@@ -274,34 +254,6 @@ private fun contentTypeFor(ext: String): String = when (ext) {
     "webm" -> "video/webm"
     "m4v", "mp4" -> "video/mp4"
     else -> "video/mp4"
-}
-
-private fun ReelEntity.toResponse(user: UserEntity?) = ReelResponse(
-    id = id,
-    videoId = videoId,
-    userId = userId,
-    sellerName = user?.name?.takeIf { it.isNotBlank() } ?: "Seller",
-    sellerInitials = initials(user?.name),
-    category = category,
-    title = title,
-    caption = caption,
-    priceLabel = priceLabel,
-    location = location,
-    videoUrl = videoUrl,
-    thumbnailUrl = thumbnailUrl,
-    thumbnailHex = thumbnailHex,
-    likeCount = likeCount,
-    commentCount = commentCount,
-    isLiked = false,
-    comments = emptyList<ReelCommentResponse>(),
-    status = status,
-    createdAt = createdAt,
-)
-
-private fun initials(name: String?): String {
-    val parts = name.orEmpty().trim().split(Regex("\\s+")).filter { it.isNotBlank() }
-    if (parts.isEmpty()) return "IE"
-    return parts.take(2).joinToString("") { it.first().uppercase() }
 }
 
 private fun normalizeHex(value: String?): String? {

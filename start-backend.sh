@@ -14,7 +14,10 @@ fi
 export POSTGRES_DB=indieestate
 export POSTGRES_USER="${POSTGRES_USER:-surajdas}"
 export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-surajdas}"
-export SPRING_PROFILES_ACTIVE="${SPRING_PROFILES_ACTIVE:-postgres}"
+export SPRING_PROFILES_ACTIVE="${SPRING_PROFILES_ACTIVE:-postgres,api}"
+export REELS_RUN_MEDIA_WORKER="${REELS_RUN_MEDIA_WORKER:-false}"
+# Local API without Docker Kafka: in-process reel transcode (see LocalVideoEventPublisher).
+export REELS_KAFKA_ENABLED="${REELS_KAFKA_ENABLED:-false}"
 export PGPASSWORD="$POSTGRES_PASSWORD"
 unset SPRING_DATASOURCE_URL
 unset DB_URL

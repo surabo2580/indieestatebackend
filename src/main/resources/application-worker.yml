@@ -1,0 +1,11 @@
+# Media worker: Kafka consumer + ffmpeg; no HTTP API.
+spring:
+  main:
+    web-application-type: none
+
+app:
+  reels:
+    run-media-worker: true
+
+server:
+  port: -1

@@ -8,5 +8,8 @@ out/
 .DS_Store
 *.log
 .env
+.env.local
+.env.uat
+.env.prod
 uploads/
 .kotlin/

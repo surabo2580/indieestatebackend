@@ -8,5 +8,6 @@ interface ReelObjectStorage {
     fun put(objectKey: String, bytes: ByteArray, contentType: String)
     fun download(objectKey: String, destination: Path)
     fun upload(objectKey: String, source: Path, contentType: String)
+    fun delete(objectKey: String)
     fun publicUrl(objectKey: String): String
 }

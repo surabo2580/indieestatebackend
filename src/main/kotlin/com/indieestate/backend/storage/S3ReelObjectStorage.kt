@@ -7,6 +7,8 @@ import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.model.GetObjectRequest
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request
 import software.amazon.awssdk.services.s3.model.PutObjectRequest
 import software.amazon.awssdk.services.s3.model.S3Exception
 import software.amazon.awssdk.services.s3.presigner.S3Presigner
@@ -84,9 +86,41 @@ class S3ReelObjectStorage(
         s3.putObject(builder.build(), RequestBody.fromFile(source))
     }
 
+    override fun delete(objectKey: String) {
+        s3.deleteObject(
+            DeleteObjectRequest.builder()
+                .bucket(bucket)
+                .key(objectKey)
+                .build(),
+        )
+    }
+
     override fun publicUrl(objectKey: String): String {
         val base = cdnBaseUrl.trimEnd('/')
         val key = objectKey.trimStart('/')
         return "$base/$key"
+    }
+
+    fun listMediaVideoIds(): List<String> {
+        val ids = linkedSetOf<String>()
+        var token: String? = null
+        do {
+            val response = s3.listObjectsV2(
+                ListObjectsV2Request.builder()
+                    .bucket(bucket)
+                    .prefix("media/")
+                    .delimiter("/")
+                    .continuationToken(token)
+                    .build(),
+            )
+            response.commonPrefixes().forEach { prefix ->
+                val id = prefix.prefix()
+                    .removePrefix("media/")
+                    .trimEnd('/')
+                if (id.isNotBlank()) ids.add(id)
+            }
+            token = response.nextContinuationToken()
+        } while (token != null)
+        return ids.sorted()
     }
 }

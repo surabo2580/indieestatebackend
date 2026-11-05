@@ -53,7 +53,7 @@ class MediaJobStore(
         renditionRepository.deleteAllByVideoId(videoId)
         renditions.forEach { renditionRepository.save(it) }
         markReel(reelId, ReelStatus.READY, videoUrl = videoUrl, thumbnailUrl = thumbnailUrl)
-        feedCache.evict()
+        feedCache.evictAll()
         return VideoProcessedEvent(videoId, reelId, VideoStatus.READY, masterKey)
     }
 
@@ -64,7 +64,7 @@ class MediaJobStore(
             videoRepository.save(video)
         }
         markReel(reelId, ReelStatus.FAILED, videoUrl = "", thumbnailUrl = null)
-        feedCache.evict()
+        feedCache.evictAll()
         return VideoProcessedEvent(videoId, reelId, VideoStatus.FAILED)
     }
 

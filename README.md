@@ -2,7 +2,9 @@
 
 Kotlin + Spring Boot API for classifieds and home services. Clients fetch categories or services, load a dynamic form schema, then submit an ad.
 
-Setup follows the same local run pattern as RewardBackend: Homebrew PostgreSQL, `surajdas` as the DB user, and `./start-backend.sh`.
+**UAT / prod (recommended):** same config keys, different env files — see **`docs/UAT_REELS_SETUP.md`** and **`environments/`**.
+
+Optional laptop dev: Homebrew PostgreSQL + `./start-backend.sh`.
 
 ## Stack
 
@@ -35,11 +37,44 @@ Optional Kafka + Redis (V2 pipeline):
 docker compose up -d kafka redis
 ```
 
-Then set `REELS_KAFKA_ENABLED=true` and `REELS_REDIS_ENABLED=true` in `.env`. Without those flags the API still works: uploads go to S3 (or fake storage in tests) and a local media worker transcodes immediately.
+Production-style split (API + Kafka media worker):
+
+```bash
+docker compose up -d postgres redis kafka
+# .env: REELS_KAFKA_ENABLED=true, REELS_RUN_MEDIA_WORKER=false
+./start-backend.sh
+./scripts/start-media-worker.sh
+```
+
+Or run everything in Docker:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.app.yml up --build
+```
+
+Without Kafka, the API runs an in-process worker (dev only). With Kafka, only `./scripts/start-media-worker.sh` (or the `media-worker` compose service) should consume transcode jobs.
+
+## UAT environment (AWS, not local)
+
+```bash
+cp environments/uat.env.example .env.uat   # fill RDS, MSK, Redis, API_BASE_URL, AWS
+scripts/verify-aws-credentials.sh uat
+# Deploy API + worker to ECS (see docs/UAT_REELS_SETUP.md), then:
+scripts/verify-reels-flow.sh uat
+```
+
+Run processes against UAT backing services from a bastion:
+
+```bash
+scripts/run-api.sh uat
+scripts/run-worker.sh uat
+```
+
+Prod: `environments/prod.env.example` → `.env.prod`, profiles `postgres,api,prod` / `postgres,worker,prod`.
 
 - API: http://localhost:8080
 - Swagger UI: http://localhost:8080/swagger-ui.html
-- Health: http://localhost:8080/api/health
+- Ops liveness (optional, ALB): `/actuator/health` — app launch health uses **Benevo SDK**, not Indieestate
 
 In-memory H2 (no Postgres):
 
@@ -66,7 +101,9 @@ Same variable names as RewardBackend:
 | `AWS_REGION` | `ap-south-1` |
 | `REELS_FFMPEG_PATH` | `ffmpeg` |
 | `REELS_KAFKA_ENABLED` | `false` |
+| `REELS_RUN_MEDIA_WORKER` | `false` (set `true` only on worker process) |
 | `REELS_REDIS_ENABLED` | `false` |
+| `SPRING_PROFILES_ACTIVE` | add `api` or `worker` for split deploy |
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` |
 | `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` |
 
@@ -83,7 +120,7 @@ On startup:
 
 If Sell shows “No form available”, the DB is missing those form rows (often on a fresh DB). Restart the backend once after pulling latest code, or run `scripts/seed-service-forms.sql` for service forms. User-created ads must be posted again only if the database itself was dropped or recreated (`dropdb indieestate` / new machine).
 
-**Reels (Play):** Scalable path is **presigned S3 upload → complete → transcode → CloudFront HLS**. See **`docs/REELS_ARCHITECTURE.md`**. Clients call `GET /api/reels/upload-config` (`PRESIGNED_S3` in production). Metadata is in Postgres; binaries are not stored in the JVM long-term.
+**Reels (Play):** Scalable path is **presigned S3 upload → complete → transcode → CloudFront HLS**. See **`docs/ARCHITECTURE.md`** (Instagram-aligned map) and **`docs/REELS_ARCHITECTURE.md`** (S3/IAM). Clients call `GET /api/reels/upload-config` (`PRESIGNED_S3` in production). Metadata is in Postgres; binaries are not stored in the JVM long-term.
 
 **Dev-only:** `REELS_ALLOW_DIRECT_UPLOAD=true` and `REELS_SKIP_S3=true` switches config to `DIRECT_MULTIPART` (legacy `POST /api/reels/upload`). Do not use in production.
 

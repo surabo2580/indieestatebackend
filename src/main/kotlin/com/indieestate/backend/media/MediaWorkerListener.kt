@@ -2,6 +2,7 @@ package com.indieestate.backend.media
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.indieestate.backend.entity.VideoStatus
+import io.micrometer.core.instrument.MeterRegistry
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -11,13 +12,17 @@ import org.springframework.stereotype.Component
 
 @Component
 @ConditionalOnProperty(name = ["app.reels.kafka-enabled"], havingValue = "true")
+@ConditionalOnProperty(name = ["app.reels.run-media-worker"], havingValue = "true")
 class MediaWorkerListener(
-    private val worker: MediaWorker,
+    private val mediaProcessing: MediaProcessingService,
     private val objectMapper: ObjectMapper,
     private val kafka: KafkaTemplate<String, String>,
+    meterRegistry: MeterRegistry,
     @param:Value("\${app.reels.kafka.processed-topic}") private val processedTopic: String,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
+    private val processedCounter = meterRegistry.counter("reels.transcode.processed")
+    private val failedCounter = meterRegistry.counter("reels.transcode.failed")
 
     @KafkaListener(
         topics = ["\${app.reels.kafka.uploaded-topic}"],
@@ -27,10 +32,15 @@ class MediaWorkerListener(
     fun onUploaded(message: String) {
         val event = objectMapper.readValue(message, VideoUploadedEvent::class.java)
         val result = try {
-            worker.processUploaded(event)
+            mediaProcessing.processUploaded(event)
         } catch (error: Exception) {
             log.error("Media worker failed for video {}", event.videoId, error)
             VideoProcessedEvent(event.videoId, event.reelId, VideoStatus.FAILED)
+        }
+        if (result.status == VideoStatus.FAILED) {
+            failedCounter.increment()
+        } else {
+            processedCounter.increment()
         }
         kafka.send(processedTopic, event.videoId.toString(), objectMapper.writeValueAsString(result))
     }

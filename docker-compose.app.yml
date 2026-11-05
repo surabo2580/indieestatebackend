@@ -1,0 +1,45 @@
+# Full reels stack: infra + API + media worker (requires .env with AWS + DB).
+# Run: docker compose -f docker-compose.yml -f docker-compose.app.yml up --build
+services:
+  kafka:
+    environment:
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+  api:
+    build: .
+    container_name: indieestate-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres,api
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-indieestate}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_HOST: redis
+      REELS_KAFKA_ENABLED: "true"
+      REELS_RUN_MEDIA_WORKER: "false"
+      REELS_REDIS_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  media-worker:
+    build: .
+    container_name: indieestate-media-worker
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres,worker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-indieestate}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REELS_KAFKA_ENABLED: "true"
+      REELS_RUN_MEDIA_WORKER: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy

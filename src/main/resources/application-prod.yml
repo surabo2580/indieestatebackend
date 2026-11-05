@@ -1,0 +1,17 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+
+app:
+  environment: prod
+  reels:
+    kafka-enabled: true
+    allow-direct-upload: false
+    skip-s3: false
+
+springdoc:
+  swagger-ui:
+    enabled: false

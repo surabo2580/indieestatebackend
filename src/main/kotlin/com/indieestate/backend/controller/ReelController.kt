@@ -4,11 +4,13 @@ import com.indieestate.backend.dto.CompleteReelRequest
 import com.indieestate.backend.dto.CreateReelRequest
 import com.indieestate.backend.dto.CreateReelUploadRequest
 import com.indieestate.backend.dto.CreateReelUploadResponse
+import com.indieestate.backend.dto.ReelPageResponse
 import com.indieestate.backend.dto.ReelResponse
 import com.indieestate.backend.dto.ReelUploadConfigResponse
 import com.indieestate.backend.security.UserPrincipal
 import com.indieestate.backend.media.VideoEventPublisher
 import com.indieestate.backend.media.VideoUploadedEvent
+import com.indieestate.backend.feed.FeedService
 import com.indieestate.backend.service.ReelMediaStore
 import com.indieestate.backend.service.ReelService
 import io.swagger.v3.oas.annotations.Operation
@@ -43,13 +45,17 @@ import kotlin.math.min
 @Tag(name = "Reels")
 class ReelController(
     private val reelService: ReelService,
+    private val feedService: FeedService,
     private val reelMediaStore: ReelMediaStore,
     private val videoEventPublisher: VideoEventPublisher,
 ) {
 
     @GetMapping
-    @Operation(summary = "List active video reels for the Play screen")
-    fun list(): List<ReelResponse> = reelService.listActive()
+    @Operation(summary = "Paginated active reels for the Play screen")
+    fun list(
+        @RequestParam(required = false) cursor: String?,
+        @RequestParam(defaultValue = "20") limit: Int,
+    ): ReelPageResponse = feedService.listActivePage(cursor, limit)
 
     @GetMapping("/upload-config")
     @Operation(summary = "Upload strategy for clients (presigned S3 vs dev-only multipart)")

@@ -28,6 +28,10 @@ class FakeReelObjectStorage(
         objects[objectKey] = Files.readAllBytes(source)
     }
 
+    override fun delete(objectKey: String) {
+        objects.remove(objectKey)
+    }
+
     override fun publicUrl(objectKey: String): String {
         val base = cdnBaseUrl.trimEnd('/')
         val key = objectKey.trimStart('/')

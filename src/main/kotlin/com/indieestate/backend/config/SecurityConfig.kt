@@ -88,13 +88,13 @@ class SecurityConfig(
                     "/api/community/**",
                     "/api/reels",
                     "/api/reels/**",
-                    "/api/health",
+                    "/api/admin/reels/storage-reconcile",
                 ).permitAll()
                 auth.requestMatchers(
                     HttpMethod.HEAD,
                     "/api/reels",
                     "/api/reels/**",
-                    "/api/health",
+                    "/api/admin/reels/storage-reconcile",
                 ).permitAll()
                 auth.requestMatchers(
                     "/api/auth/register",

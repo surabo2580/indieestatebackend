@@ -1,0 +1,18 @@
+# UAT: same safety as prod (Flyway + validate), slightly more operator-friendly.
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+
+app:
+  environment: uat
+  reels:
+    kafka-enabled: true
+    allow-direct-upload: false
+    skip-s3: false
+
+springdoc:
+  swagger-ui:
+    enabled: true

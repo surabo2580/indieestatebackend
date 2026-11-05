@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 
 @Component
 @ConditionalOnProperty(name = ["app.reels.kafka-enabled"], havingValue = "true")
+@ConditionalOnProperty(name = ["app.reels.run-media-worker"], havingValue = "false", matchIfMissing = true)
 class KafkaVideoEventPublisher(
     private val kafka: KafkaTemplate<String, String>,
     private val objectMapper: ObjectMapper,

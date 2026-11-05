@@ -29,16 +29,6 @@ class ApiIntegrationTest {
     private val objectMapper = jacksonObjectMapper()
 
     @Test
-    fun healthIsUp() {
-        mockMvc.get("/api/health")
-            .andExpect {
-                status { isOk() }
-                jsonPath("$.status") { value("UP") }
-                jsonPath("$.service") { value("indieestate-backend") }
-            }
-    }
-
-    @Test
     fun catalogsAndFormAreSeeded() {
         mockMvc.get("/api/categories")
             .andExpect {
@@ -154,7 +144,8 @@ class ApiIntegrationTest {
         mockMvc.get("/api/reels")
             .andExpect {
                 status { isOk() }
-                jsonPath("$.length()") { value(0) }
+                jsonPath("$.items.length()") { value(0) }
+                jsonPath("$.nextCursor") { doesNotExist() }
             }
 
         mockMvc.post("/api/reels") {
@@ -207,10 +198,10 @@ class ApiIntegrationTest {
         mockMvc.get("/api/reels")
             .andExpect {
                 status { isOk() }
-                jsonPath("$.length()") { value(1) }
-                jsonPath("$[0].category") { value("Cars") }
-                jsonPath("$[0].priceLabel") { value("₹8.4 Lakh") }
-                jsonPath("$[0].comments.length()") { value(0) }
+                jsonPath("$.items.length()") { value(1) }
+                jsonPath("$.items[0].category") { value("Cars") }
+                jsonPath("$.items[0].priceLabel") { value("₹8.4 Lakh") }
+                jsonPath("$.items[0].comments.length()") { value(0) }
             }
     }
 
@@ -263,8 +254,8 @@ class ApiIntegrationTest {
         mockMvc.get("/api/reels")
             .andExpect {
                 status { isOk() }
-                jsonPath("$[0].title") { value("Villa walkthrough") }
-                jsonPath("$[0].status") { value("READY") }
+                jsonPath("$.items[0].title") { value("Villa walkthrough") }
+                jsonPath("$.items[0].status") { value("READY") }
             }
     }
 

@@ -1,0 +1,22 @@
+# UAT-shaped stack on a single host (e.g. UAT EC2). Uses .env.uat — not laptop .env.
+# docker compose -f docker-compose.yml -f docker-compose.uat.yml -f docker-compose.app.yml up --build
+services:
+  api:
+    env_file: .env.uat
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres,api,uat
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-indieestate}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_HOST: redis
+      REELS_KAFKA_ENABLED: "true"
+      REELS_RUN_MEDIA_WORKER: "false"
+      REELS_REDIS_ENABLED: "true"
+
+  media-worker:
+    env_file: .env.uat
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres,worker,uat
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-indieestate}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REELS_KAFKA_ENABLED: "true"
+      REELS_RUN_MEDIA_WORKER: "true"

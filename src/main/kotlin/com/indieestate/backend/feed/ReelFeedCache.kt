@@ -1,9 +1,9 @@
 package com.indieestate.backend.feed
 
-import com.indieestate.backend.dto.ReelResponse
+import com.indieestate.backend.dto.ReelPageResponse
 
 interface ReelFeedCache {
-    fun get(): List<ReelResponse>?
-    fun put(reels: List<ReelResponse>)
-    fun evict()
+    fun getPage(cacheKey: String): ReelPageResponse?
+    fun putPage(cacheKey: String, page: ReelPageResponse)
+    fun evictAll()
 }
