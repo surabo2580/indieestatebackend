@@ -17,9 +17,20 @@ interface ReelRepository : JpaRepository<ReelEntity, UUID> {
         """
         SELECT r FROM ReelEntity r
         WHERE r.isActive = true AND r.status IN :statuses
+        ORDER BY r.createdAt DESC, r.id DESC
+        """,
+    )
+    fun findFeedFirstPage(
+        @Param("statuses") statuses: Collection<String>,
+        pageable: Pageable,
+    ): List<ReelEntity>
+
+    @Query(
+        """
+        SELECT r FROM ReelEntity r
+        WHERE r.isActive = true AND r.status IN :statuses
         AND (
-            :beforeCreatedAt IS NULL
-            OR r.createdAt < :beforeCreatedAt
+            r.createdAt < :beforeCreatedAt
             OR (r.createdAt = :beforeCreatedAt AND r.id < :beforeId)
         )
         ORDER BY r.createdAt DESC, r.id DESC
@@ -27,8 +38,8 @@ interface ReelRepository : JpaRepository<ReelEntity, UUID> {
     )
     fun findFeedPage(
         @Param("statuses") statuses: Collection<String>,
-        @Param("beforeCreatedAt") beforeCreatedAt: Instant?,
-        @Param("beforeId") beforeId: UUID?,
+        @Param("beforeCreatedAt") beforeCreatedAt: Instant,
+        @Param("beforeId") beforeId: UUID,
         pageable: Pageable,
     ): List<ReelEntity>
 

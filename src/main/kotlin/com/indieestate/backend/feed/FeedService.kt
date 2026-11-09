@@ -28,12 +28,17 @@ class FeedService(
         val cursor = ReelFeedCursor.decode(cursorToken)
         val fetchSize = pageSize + 1
         val statuses = listOf(ReelStatus.READY, ReelStatus.PROCESSING)
-        val reels = reelRepository.findFeedPage(
-            statuses = statuses,
-            beforeCreatedAt = cursor?.createdAt,
-            beforeId = cursor?.id,
-            pageable = PageRequest.of(0, fetchSize),
-        )
+        val pageable = PageRequest.of(0, fetchSize)
+        val reels = if (cursor == null) {
+            reelRepository.findFeedFirstPage(statuses, pageable)
+        } else {
+            reelRepository.findFeedPage(
+                statuses = statuses,
+                beforeCreatedAt = cursor.createdAt,
+                beforeId = cursor.id,
+                pageable = pageable,
+            )
+        }
         if (reels.isEmpty()) {
             val empty = ReelPageResponse(items = emptyList(), nextCursor = null)
             feedCache.putPage(cacheKey, empty)
