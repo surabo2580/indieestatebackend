@@ -83,6 +83,8 @@ class SecurityConfig(
                     "/api/services/**",
                     "/api/forms",
                     "/api/forms/**",
+                    "/api/banners",
+                    "/api/banners/**",
                     "/api/ads",
                     "/api/community",
                     "/api/community/**",
@@ -108,7 +110,10 @@ class SecurityConfig(
                     "/swagger-ui/**",
                     "/v3/api-docs/**",
                 ).permitAll()
-                auth.requestMatchers(HttpMethod.POST, "/api/categories", "/api/services").permitAll()
+                auth.requestMatchers(HttpMethod.POST, "/api/categories", "/api/services", "/api/forms", "/api/banners").permitAll()
+                auth.requestMatchers(HttpMethod.PUT, "/api/forms/**").permitAll()
+                auth.requestMatchers(HttpMethod.PUT, "/api/categories/**", "/api/services/**").permitAll()
+                auth.requestMatchers(HttpMethod.DELETE, "/api/categories/**", "/api/services/**").permitAll()
                 auth.anyRequest().authenticated()
             }
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)

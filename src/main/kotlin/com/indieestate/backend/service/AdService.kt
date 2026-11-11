@@ -6,6 +6,8 @@ import com.indieestate.backend.dto.CreateAdRequest
 import com.indieestate.backend.entity.AdEntity
 import com.indieestate.backend.entity.AdStatus
 import com.indieestate.backend.repository.AdRepository
+import com.indieestate.backend.repository.CategoryRepository
+import com.indieestate.backend.repository.ServiceRepository
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -21,6 +23,8 @@ class AdService(
     private val catalogServiceService: CatalogServiceService,
     private val formSchemaValidator: FormSchemaValidator,
     private val formDataNormalizer: FormDataNormalizer,
+    private val categoryRepository: CategoryRepository,
+    private val serviceRepository: ServiceRepository,
 ) {
 
     @Transactional
@@ -93,7 +97,7 @@ class AdService(
     }
 
     @Transactional(readOnly = true)
-    fun listActive(categoryId: UUID?, serviceId: UUID?): List<AdResponse> {
+    fun listActive(categoryId: UUID?, serviceId: UUID?, query: String? = null): List<AdResponse> {
         val ads = when {
             categoryId != null -> {
                 val scope = categoryService.categoryScopeIds(categoryId)
@@ -103,12 +107,36 @@ class AdService(
                 val scope = catalogServiceService.serviceScopeIds(serviceId)
                 adRepository.findAllByStatusAndServiceIdInOrderByCreatedAtDesc(AdStatus.ACTIVE, scope)
             }
-            else -> emptyList()
+            else -> adRepository.findAllByStatusOrderByCreatedAtDesc(AdStatus.ACTIVE)
         }
         val now = Instant.now()
-        return ads
-            .filter { now.isBefore(it.updatedAt.plus(AdStatus.LISTING_DAYS, ChronoUnit.DAYS)) }
-            .map { it.toResponse() }
+        val active = ads.filter { now.isBefore(it.updatedAt.plus(AdStatus.LISTING_DAYS, ChronoUnit.DAYS)) }
+        return matching(active, query).map { it.toResponse() }
+    }
+
+    private fun matching(ads: List<AdEntity>, query: String?): List<AdEntity> {
+        val tokens = query.orEmpty()
+            .trim()
+            .lowercase()
+            .split(Regex("\\s+"))
+            .filter { it.isNotBlank() }
+        if (tokens.isEmpty()) return ads
+        val categoryNames = categoryRepository.findAll().associate { it.id to it.name.lowercase() }
+        val serviceNames = serviceRepository.findAll().associate { it.id to it.name.lowercase() }
+        return ads.filter { ad ->
+            val haystack = buildString {
+                append(ad.title.lowercase())
+                append(' ')
+                append(categoryNames[ad.categoryId].orEmpty())
+                append(' ')
+                append(serviceNames[ad.serviceId].orEmpty())
+                ad.data.values.forEach { value ->
+                    append(' ')
+                    append(value?.toString()?.lowercase().orEmpty())
+                }
+            }
+            tokens.all { haystack.contains(it) }
+        }
     }
 
     private fun resolveCategory(formCategoryId: UUID?, requested: UUID?): UUID? {

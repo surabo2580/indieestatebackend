@@ -5,6 +5,8 @@ import org.springframework.data.jpa.repository.JpaRepository
 import java.util.UUID
 
 interface AdRepository : JpaRepository<AdEntity, UUID> {
+    fun findAllByStatusOrderByCreatedAtDesc(status: String): List<AdEntity>
+
     fun findAllByUserIdOrderByCreatedAtDesc(userId: UUID): List<AdEntity>
 
     fun findAllByStatusAndCategoryIdInOrderByCreatedAtDesc(

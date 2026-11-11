@@ -7,6 +7,7 @@ import java.util.UUID
 interface FormRepository : JpaRepository<FormEntity, UUID> {
     fun findAllByIsActiveTrueOrderByCodeAsc(): List<FormEntity>
     fun findByCodeIgnoreCaseAndIsActiveTrue(code: String): FormEntity?
+    fun existsByCodeIgnoreCase(code: String): Boolean
     fun findAllByCategoryIdAndIsActiveTrue(categoryId: UUID): List<FormEntity>
     fun findAllByCategoryIdInAndIsActiveTrue(categoryIds: Collection<UUID>): List<FormEntity>
     fun findAllByServiceIdAndIsActiveTrue(serviceId: UUID): List<FormEntity>

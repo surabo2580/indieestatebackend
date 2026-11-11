@@ -1,6 +1,16 @@
 package com.indieestate.backend.dto
 
+import jakarta.validation.constraints.NotBlank
 import java.util.UUID
+
+data class CreateServiceRequest(
+    @field:NotBlank
+    val name: String,
+    val slug: String? = null,
+    val icon: String? = null,
+    val sortOrder: Int? = null,
+    val parentId: UUID? = null,
+)
 
 data class ServiceResponse(
     val id: UUID,

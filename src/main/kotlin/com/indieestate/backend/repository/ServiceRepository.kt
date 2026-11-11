@@ -7,4 +7,5 @@ import java.util.UUID
 interface ServiceRepository : JpaRepository<ServiceEntity, UUID> {
     fun findAllByIsActiveTrueOrderBySortOrderAsc(): List<ServiceEntity>
     fun findAllByIsActiveTrueAndParentIdOrderBySortOrderAsc(parentId: UUID): List<ServiceEntity>
+    fun existsBySlugIgnoreCase(slug: String): Boolean
 }

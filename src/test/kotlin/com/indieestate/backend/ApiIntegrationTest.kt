@@ -10,8 +10,10 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.delete
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
+import org.springframework.test.web.servlet.put
 import org.springframework.transaction.annotation.Transactional
 
 @SpringBootTest
@@ -136,6 +138,28 @@ class ApiIntegrationTest {
             status { isOk() }
             jsonPath("$.length()") { value(1) }
             jsonPath("$[0].title") { value("Honda City 2018") }
+        }
+
+        mockMvc.get("/api/ads") {
+            param("q", "honda petrol")
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.length()") { value(1) }
+            jsonPath("$[0].title") { value("Honda City 2018") }
+        }
+
+        mockMvc.get("/api/ads") {
+            param("q", "cars")
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.length()") { value(1) }
+        }
+
+        mockMvc.get("/api/ads") {
+            param("q", "bicycle")
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.length()") { value(0) }
         }
     }
 
@@ -269,6 +293,165 @@ class ApiIntegrationTest {
         }.andExpect {
             status { isConflict() }
         }
+    }
+
+    @Test
+    fun adminCanCreateTheSellFormForASubcategory() {
+        val categories = objectMapper.readTree(
+            mockMvc.get("/api/categories").andReturn().response.contentAsString,
+        )
+        val sedanId = categories.first { it["slug"].asText() == "cars" }["subcategories"]
+            .first { it["slug"].asText() == "sedan" }["id"].asText()
+
+        val created = postJson(
+            "/api/forms",
+            """
+            {
+              "title": "Sell a sedan",
+              "type": "SELL",
+              "categoryId": "$sedanId",
+              "fields": [
+                {"key": "title", "label": "Ad title", "type": "text", "required": true, "maxLength": 80},
+                {"key": "price", "label": "Price", "type": "number", "required": true, "min": 0},
+                {"key": "fuel", "label": "Fuel", "type": "select", "required": true, "options": ["Petrol", "Diesel"]}
+              ]
+            }
+            """.trimIndent(),
+            expectedStatus = 201,
+        )
+        val formId = created["id"].asText()
+
+        mockMvc.get("/api/forms") { param("categoryId", sedanId) }
+            .andExpect {
+                status { isOk() }
+                jsonPath("$[0].id") { value(formId) }
+                jsonPath("$[0].code") { value("SELL_A_SEDAN") }
+                jsonPath("$[0].categoryId") { value(sedanId) }
+                jsonPath("$[0].schema.fields.length()") { value(3) }
+            }
+
+        mockMvc.put("/api/forms/$formId") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """
+                {
+                  "title": "Sell this sedan",
+                  "type": "SELL",
+                  "fields": [
+                    {"key": "title", "label": "Ad title", "type": "text", "required": true},
+                    {"key": "color", "label": "Color", "type": "text", "required": false}
+                  ]
+                }
+            """.trimIndent()
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.title") { value("Sell this sedan") }
+            jsonPath("$.version") { value(2) }
+            jsonPath("$.schema.fields[1].key") { value("color") }
+        }
+    }
+
+    @Test
+    fun adminCanManageCategoriesAndServices() {
+        val createdCategory = postJson(
+            "/api/categories",
+            """{"name":"Electronics","icon":"devices","sortOrder":5}""",
+            expectedStatus = 201,
+        )
+        val categoryId = createdCategory["id"].asText()
+
+        mockMvc.put("/api/categories/$categoryId") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"name":"Gadgets","slug":"gadgets","icon":"devices","sortOrder":6}"""
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.slug") { value("gadgets") }
+            jsonPath("$.name") { value("Gadgets") }
+        }
+
+        val subcategory = postJson(
+            "/api/categories",
+            """{"name":"Phones","parentId":"$categoryId","sortOrder":1}""",
+            expectedStatus = 201,
+        )
+        mockMvc.post("/api/categories") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"name":"Android","parentId":"${subcategory["id"].asText()}"}"""
+        }.andExpect {
+            status { isBadRequest() }
+        }
+
+        mockMvc.delete("/api/categories/$categoryId")
+            .andExpect { status { isNoContent() } }
+
+        mockMvc.get("/api/categories")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.length()") { value(4) }
+            }
+
+        val createdService = postJson(
+            "/api/services",
+            """{"name":"Plumbing","icon":"plumbing","sortOrder":5}""",
+            expectedStatus = 201,
+        )
+        val serviceId = createdService["id"].asText()
+
+        postJson(
+            "/api/services",
+            """{"name":"Leak repair","parentId":"$serviceId","sortOrder":1}""",
+            expectedStatus = 201,
+        )
+
+        mockMvc.put("/api/services/$serviceId") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"name":"Home plumbing","slug":"home-plumbing","icon":"plumbing","sortOrder":8}"""
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.slug") { value("home-plumbing") }
+            jsonPath("$.name") { value("Home plumbing") }
+        }
+
+        mockMvc.get("/api/services/$serviceId/subcategories")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.length()") { value(1) }
+                jsonPath("$[0].slug") { value("leak-repair") }
+            }
+
+        mockMvc.delete("/api/services/$serviceId")
+            .andExpect { status { isNoContent() } }
+
+        mockMvc.get("/api/services")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.length()") { value(4) }
+            }
+    }
+
+    @Test
+    fun promoBannerIsCreatedAndListed() {
+        mockMvc.post("/api/banners") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """
+                {
+                  "title": "DJ GANESH",
+                  "description": "Live at Bigbull on Aug 14",
+                  "targetUrl": "https://example.com/dj-ganesh",
+                  "sortOrder": 1
+                }
+            """.trimIndent()
+        }.andExpect {
+            status { isCreated() }
+            jsonPath("$.title") { value("DJ GANESH") }
+            jsonPath("$.targetUrl") { value("https://example.com/dj-ganesh") }
+        }
+
+        mockMvc.get("/api/banners")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.length()") { value(1) }
+                jsonPath("$[0].description") { value("Live at Bigbull on Aug 14") }
+            }
     }
 
     private fun postJson(path: String, body: String, expectedStatus: Int): JsonNode {

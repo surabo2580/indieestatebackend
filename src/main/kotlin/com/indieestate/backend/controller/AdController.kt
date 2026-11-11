@@ -41,7 +41,8 @@ class AdController(
     fun list(
         @RequestParam(required = false) categoryId: UUID?,
         @RequestParam(required = false) serviceId: UUID?,
-    ): List<AdResponse> = adService.listActive(categoryId, serviceId)
+        @RequestParam(required = false) q: String?,
+    ): List<AdResponse> = adService.listActive(categoryId, serviceId, q)
 
     @GetMapping("/me")
     @Operation(summary = "List ads posted by the current user")
